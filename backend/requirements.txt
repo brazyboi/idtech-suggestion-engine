@@ -9,4 +9,3 @@ python-dotenv
 pytest
 httpx
 requests
-lxml

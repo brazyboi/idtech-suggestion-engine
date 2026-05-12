@@ -1,5 +1,5 @@
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, JSON
+from sqlalchemy import String, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..base import Base
 from .associations import hardware_category_map, hardware_use_case_map, hardware_software_map
@@ -20,6 +20,7 @@ class Hardware(Base):
     ik_rating: Mapped[Optional[str]] = mapped_column(String(50))
     interface: Mapped[Optional[str]] = mapped_column(String(255))
     extra_specs: Mapped[Optional[dict]] = mapped_column(JSON)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     # Many-to-Many Relationships
     categories: Mapped[List["Category"]] = relationship(

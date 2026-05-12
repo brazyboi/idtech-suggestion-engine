@@ -7,6 +7,7 @@ CREATE TABLE hardware (
       ik_rating VARCHAR(50),
       interface VARCHAR(255),
       extra_specs JSONB,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
       CONSTRAINT unique_model_name UNIQUE (model_name)
 );
 
