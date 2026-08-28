@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +8,7 @@ from backend.agent.loop import process_message
 from backend.engine.conversation_store import ConversationStore, get_conversation_store
 from backend.llm.contracts import ChatResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 WELCOME_MESSAGE = (
@@ -62,5 +64,9 @@ async def chat_endpoint(
         store.save_session(session_id, session)
 
         return payload
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("chat_endpoint failed for session %s", request.session_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong processing your message. Please try again.",
+        )

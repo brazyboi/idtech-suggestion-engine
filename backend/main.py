@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from fastapi import FastAPI
@@ -13,6 +14,22 @@ if _project_root not in sys.path:
 
 # Load environment variables before importing routers
 load_dotenv()
+
+# Fail fast on missing config: without this, the app boots "successfully"
+# and every chat request silently falls back to a fake "test-key" (see
+# agent/classifier.py and agent/loop.py), which only surfaces as a
+# confusing OpenAI auth error deep inside a request instead of an obvious
+# startup failure. Set SKIP_STARTUP_CHECKS=1 to bypass (e.g. for tooling
+# that imports this module without needing the chat feature to work).
+if not os.getenv("SKIP_STARTUP_CHECKS"):
+    if not (os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY")):
+        raise RuntimeError(
+            "OPENAI_API_KEY (or OPENAI_ADMIN_KEY) is not set. The chat agent "
+            "cannot function without it. Set it in the environment or a .env "
+            "file before starting the server."
+        )
+
+logger = logging.getLogger(__name__)
 
 from backend.routers import chat, pdf
 from backend.routers import lead as lead_router

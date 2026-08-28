@@ -22,7 +22,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 from ..engine.state_machine import (
     CollectedInfo,
@@ -268,15 +268,48 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
         messages.append(msg)
     messages.append({"role": "user", "content": message})
 
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY") or "test-key")
+    # timeout + max_retries are explicit (not SDK defaults) so a slow/flaky
+    # OpenAI call fails predictably within a demo-acceptable window instead
+    # of hanging the request indefinitely. The SDK itself retries transient
+    # errors (connection errors, 429, 5xx) with backoff up to max_retries.
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY") or "test-key",
+        timeout=20.0,
+        max_retries=2,
+    )
+
+    def _safe_fallback() -> ChatResponse:
+        """Safe degraded response — used both when MAX_TOOL_ROUNDS is
+        exhausted and when the OpenAI call fails outright (timeout, rate
+        limit, connection error, etc). Never lets a call-site exception
+        propagate up to the router as a raw 500."""
+        fallback = (
+            "I'm having trouble processing that right now. Could you rephrase, "
+            "or would you like me to connect you with our team directly?"
+        )
+        trace.response_generated("clarification", fallback)
+        session.history.append({"role": "user", "content": message})
+        session.history.append({"role": "assistant", "content": fallback})
+        session.turn_count += 1
+        trace.log_to_console()
+        return ChatResponse(
+            type="clarification",
+            text=fallback,
+            new_info=new_info,
+            next_state=ConversationState.QUALIFYING,
+        )
 
     for round_num in range(MAX_TOOL_ROUNDS):
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            tools=tools if tool_names_used else tools,  # Keep tools available
-            tool_choice="auto" if not lead_submitted_this_turn else "none",
-            messages=messages,
-        )
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                tools=tools if tool_names_used else tools,  # Keep tools available
+                tool_choice="auto" if not lead_submitted_this_turn else "none",
+                messages=messages,
+            )
+        except OpenAIError:
+            logger.exception("OpenAI call failed on turn %d, round %d", session.turn_count, round_num)
+            return _safe_fallback()
 
         choice = response.choices[0]
         reply_message = choice.message
@@ -373,22 +406,7 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
             })
 
     # ── MAX_TOOL_ROUNDS reached — safe fallback ──
-    fallback = (
-        "I'm having trouble processing that right now. Could you rephrase, "
-        "or would you like me to connect you with our team directly?"
-    )
-    trace.response_generated("clarification", fallback)
-    session.history.append({"role": "user", "content": message})
-    session.history.append({"role": "assistant", "content": fallback})
-    session.turn_count += 1
-    trace.log_to_console()
-
-    return ChatResponse(
-        type="clarification",
-        text=fallback,
-        new_info=new_info,
-        next_state=ConversationState.QUALIFYING,
-    )
+    return _safe_fallback()
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
