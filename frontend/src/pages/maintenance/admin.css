@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root {
+    background-color: #FFFFFF;
+    font-family: Inter, sans-serif;
+    --confirm-green: #02AF6E;
+    --warning-red: #DF1300;
+    --back-gray: #D9D9D9;
+}
+
+.hi {
+    background-color: #FFFFFF;
+}
+
+@theme {
+    --background: #FFFFFF;
+}
+
+.row-selected {
+    outline: 2px solid var(--confirm-green);
+    outline-offset: -2px;
+}
+
+.cell-scroll::-webkit-scrollbar {
+    height: 3px;
+}
+.cell-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.cell-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 9999px;
+}

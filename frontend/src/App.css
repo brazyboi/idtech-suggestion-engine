@@ -1,5 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import "tailwindcss";
 
 body {
-    background-color: #121212;
+    background-color: var(--bg);
+    font-family: 'Inter', sans-serif
+}
+
+:root {
+    --bg: #0B0C0D;
+    --panel-bg: #0B0C0D;
+    --bubble-user-bg: #1F3026;
+    --text-primary: #e5e7eb;
+    --text-secondary: #9ca3af;
+    --accent: #03A60E;
+    --accent-600: #84D98A;
+    --bot-bubble-bg: #1F2937;
+    --dot-color: #9ca3af;
+    --border: #374151;
+    --button-border: #d1d5db;
+}
+
+.light-theme {
+    --bg: #F8FAFC;
+    --panel-bg: #F8FAFC;
+    --bubble-user-bg: #EDF7F1;
+    --text-primary: #0B1220;
+    --text-secondary: #4B5563;
+    --accent: #03A60E;
+    --accent-600: #84D98A;
+    --bot-bubble-bg: #E6EEF3;
+    --dot-color: #6B7280;
+    --border: #E5E7EB;
+    --button-border: #D1D5DB;
+}
+
+.chat-bg {
+    background-color: var(--panel-bg) !important;
+}
+
+.bubble-user-bg {
+    background-color: var(--bubble-user-bg) !important;
+    color: var(--text-primary);
+}
+
+.text-primary {
+    color: var(--text-primary) !important;
+}
+
+.text-secondary {
+    color: var(--text-secondary) !important;
+}
+
+.btn-accent {
+    background-color: var(--accent) !important;
+    color: #ffffff !important;
+    border-color: var(--button-border) !important;
+}
+
+.btn-accent:hover {
+    background-color: var(--accent-600) !important;
+}
+
+.choice-btn {
+    border-radius: 9999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    border: 1px solid var(--button-border);
+}
+
+.choice-btn:disabled,
+.choice-btn[disabled] {
+    background-color: var(--panel-bg) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--button-border) !important;
+    opacity: 0.7;
+}
+
+textarea::placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 1;
+}
+
+.bot-bubble {
+    background-color: var(--bot-bubble-bg) !important;
+}
+
+.bot-dot {
+    background-color: var(--dot-color) !important;
 }

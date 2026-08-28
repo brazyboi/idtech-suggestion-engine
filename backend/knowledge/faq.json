@@ -1,0 +1,42 @@
+{
+  "_description": "Frequently asked questions with approved answers. The agent presents these verbatim to ensure legal/marketing accuracy. DO NOT paraphrase.",
+  "_rules": [
+    "All pricing questions route through the 'pricing' topic — never give specific prices.",
+    "Answer exactly as written. Do not add or remove information.",
+    "If the question doesn't match any topic, fall back to 'general'."
+  ],
+  "topics": {
+    "pricing": {
+      "answer": "Pricing depends on volume, configuration, and your specific deployment needs. I can connect you with an ID TECH specialist who can provide a customized quote based on your requirements. Would you like me to set that up?",
+      "keywords": ["price", "cost", "pricing", "quote", "how much", "budget", "rate", "cheap", "expensive", "discount"]
+    },
+    "shipping": {
+      "answer": "ID TECH ships worldwide from our distribution centers. Standard shipping typically takes 5-7 business days within North America, with expedited options available. Lead times for custom configurations vary — a specialist can give you a precise timeline.",
+      "keywords": ["shipping", "delivery", "ship", "lead time", "how long", "arrive"]
+    },
+    "warranty": {
+      "answer": "ID TECH products come with a standard manufacturer warranty covering defects in materials and workmanship. Extended warranty and service plans are available. For your specific product and configuration, a specialist can walk you through the options.",
+      "keywords": ["warranty", "guarantee", "coverage", "repair", "replace", "broken", "defect"]
+    },
+    "returns": {
+      "answer": "ID TECH accepts returns within 30 days for standard products in original condition. Custom-configured or special-order items may have different terms. I can connect you with support to process a return or discuss your situation.",
+      "keywords": ["return", "refund", "money back", "send back", "exchange"]
+    },
+    "compatibility": {
+      "answer": "ID TECH hardware works with most major POS and payment software platforms. Compatibility depends on your host system, interface requirements, and software stack. If you share more about your setup, I can help narrow down the best-fit options for you.",
+      "keywords": ["compatible", "work with", "integrate", "integration", "platform", "software"]
+    },
+    "security": {
+      "answer": "All ID TECH payment devices are PCI PTS certified and support end-to-end encryption. Security is built into every product — from tamper-resistant hardware to SRED key management. Specific certification details are available in each product's datasheet.",
+      "keywords": ["security", "secure", "PCI", "encryption", "compliance", "certified", "tamper"]
+    },
+    "support": {
+      "answer": "ID TECH provides technical support during business hours (M-F, 8am-6pm EST) via phone and email. We also offer 24/7 support plans for mission-critical deployments. I can connect you with the support team based on your location and needs.",
+      "keywords": ["support", "help", "technical support", "contact", "phone", "call", "reach"]
+    },
+    "general": {
+      "answer": "That's a great question! A member of our sales engineering team would be the best person to help with that. Would you like me to connect you with a specialist who can provide detailed information tailored to your needs?",
+      "keywords": []
+    }
+  }
+}

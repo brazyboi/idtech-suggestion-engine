@@ -100,7 +100,31 @@ docker-compose up --build
 - **Backend** at http://localhost:8000
 - **Frontend** at http://localhost:5173
 
-### 3. Running without Docker
+### 3. Quick Backend Startup (One Command)
+
+From the repo root:
+
+```bash
+./start-backend.ps1
+```
+
+On Windows Command Prompt:
+
+```bash
+start-backend.cmd
+```
+
+What this does:
+- Starts the backend DB container (`docker compose up -d db`) unless you pass `-NoDb`
+- Creates `backend/.venv` if it does not exist
+- Installs backend dependencies
+- Runs FastAPI with reload at `http://localhost:8000`
+
+Optional flags:
+- `-SkipInstall` to skip `pip install`
+- `-NoDb` to skip starting Docker DB
+
+### 4. Running without Docker
 
 **Backend:**
 ```bash
@@ -108,7 +132,8 @@ cd backend
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+cd ..
+python -m uvicorn backend.main:app --reload --port 8000
 ```
 
 **Frontend:**

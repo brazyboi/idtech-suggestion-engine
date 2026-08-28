@@ -1,18 +1,68 @@
 services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: product_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: ics1802026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Auto-seed the database on first startup (files run in alphabetical order)
+      - ./backend/db_scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d product_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - ./:/app
     env_file: ./backend/.env
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      # Override DATABASE_URL to point at the 'db' container instead of localhost
+      DATABASE_URL: postgresql://admin:ics1802026@db:5432/product_db
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
     ports:
       - "5173:5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
     command: npm run dev -- --host
+    develop:
+      watch:
+        # Sync source files instantly — no rebuild
+        - action: sync
+          path: ./src
+          target: /app/src
+
+        # Sync public assets
+        - action: sync
+          path: ./public
+          target: /app/public
+
+        # Rebuild image when dependencies change
+        - action: rebuild
+          path: package.json
+
+        # Rebuild on config changes
+        - action: rebuild
+          path: vite.config.ts
+
+volumes:
+  pgdata:

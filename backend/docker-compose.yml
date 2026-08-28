@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: ics1802026
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db_scripts:/docker-entrypoint-initdb.d # for DB-centric schema creation

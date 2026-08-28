@@ -1,0 +1,50 @@
+{
+  "_description": "Pre-written solution narratives for each vertical. The agent uses these to provide rich, vertical-specific context when presenting product recommendations.",
+  "verticals": {
+    "Parking Payment Systems": {
+      "narrative": "ID TECH's parking solutions are built for high-volume, unattended environments. Our readers handle everything from gated entry/exit systems to pay-on-foot kiosks, with weatherproof designs rated for outdoor deployment and contactless tap-and-go support that keeps traffic moving.",
+      "key_differentiators": [
+        "Rugged outdoor-rated enclosures (IP65+)",
+        "Fast contactless transactions for throughput",
+        "Integration with major parking management systems",
+        "Support for magstripe, chip, and NFC/contactless"
+      ]
+    },
+    "Transit Payment Solutions": {
+      "narrative": "Transit demands speed, reliability, and durability. ID TECH readers are deployed in buses, trains, and fare gates worldwide — handling vibration, temperature extremes, and constant use. Our contactless-first designs support open-loop and closed-loop fare collection with sub-300ms transaction times.",
+      "key_differentiators": [
+        "Vibration and impact resistant (IK rated)",
+        "Sub-300ms contactless read times",
+        "Open-loop and closed-loop fare support",
+        "Compact form factors for tight installations"
+      ]
+    },
+    "Loyalty Program Contactless Readers": {
+      "narrative": "ID TECH's retail and loyalty readers blend into the counter with sleek, compact designs. They handle contactless payments, loyalty cards, and mobile wallets seamlessly — making every transaction fast and frictionless. Pin-on-glass and display options create a modern checkout experience.",
+      "key_differentiators": [
+        "Sleek, compact countertop designs",
+        "Multi-format: NFC, chip, magstripe",
+        "Loyalty and gift card support",
+        "USB-C and Bluetooth connectivity options"
+      ]
+    },
+    "Vending Payment Systems": {
+      "narrative": "For unattended vending and kiosk applications, ID TECH delivers compact, low-power readers that fit into tight spaces. Our devices support the full range of payment methods — contactless cards, mobile wallets, and traditional magstripe — while drawing minimal power for battery or solar-powered installations.",
+      "key_differentiators": [
+        "Ultra-compact form factors",
+        "Low power draw for battery operation",
+        "MDB and pulse interfaces for vending",
+        "Ruggedized for public unattended use"
+      ]
+    },
+    "EV Charging Station Payment Solutions": {
+      "narrative": "EV charging stations need payment hardware that's weatherproof, reliable, and compliant with open payment standards. ID TECH's outdoor-rated readers withstand rain, snow, dust, and temperature extremes while providing seamless contactless and chip payment acceptance.",
+      "key_differentiators": [
+        "Full outdoor weatherproofing (IP65+)",
+        "Wide operating temperature range",
+        "Contactless and chip card support",
+        "Compact for integration into charging pedestals"
+      ]
+    }
+  }
+}

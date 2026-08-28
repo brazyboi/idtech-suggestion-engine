@@ -29,6 +29,7 @@ CREATE TABLE use_cases (
 CREATE TABLE software (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    extra_fields JSONB,
     CONSTRAINT unique_software_name UNIQUE (name)
 );
 

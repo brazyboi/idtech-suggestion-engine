@@ -40,25 +40,36 @@ class ProductRepository:
 
         if input_power:
             # Broaden search to include extra_specs and voltage patterns
-            power_filter = or_(
+            power_val = input_power.upper()
+            power_filters = [
                 Hardware.input_power.ilike(f"%{input_power}%"),
-                Hardware.extra_specs.cast(String).ilike(f"%{input_power}%")
-            )
+                Hardware.extra_specs.cast(String).ilike(f"%{input_power}%"),
+                Hardware.input_power.is_(None) # Allow NULL if power is requested
+            ]
+            
+            # Handle VAC/AC synonym
+            if "VAC" in power_val or "AC" in power_val:
+                power_filters.extend([
+                    Hardware.input_power.ilike("%AC%"),
+                    Hardware.extra_specs.cast(String).ilike("%AC%")
+                ])
+                
             # Add VDC/DC/V logic
-            if "DC" in input_power.upper() or "V" in input_power.upper():
-                power_filter = or_(
-                    power_filter,
+            if "DC" in power_val or "V" in power_val:
+                power_filters.extend([
                     Hardware.input_power.ilike("%DC%"),
                     Hardware.extra_specs.cast(String).ilike("%DC%"),
                     Hardware.input_power.ilike("%V%"), # Match '9V', '24V'
                     Hardware.extra_specs.cast(String).ilike("%V%")
-                )
-            filters.append(power_filter)
+                ])
+            
+            filters.append(or_(*power_filters))
         
         if interface:
             filters.append(or_(
                 Hardware.interface.ilike(f"%{interface}%"),
-                Hardware.extra_specs.cast(String).ilike(f"%{interface}%")
+                Hardware.extra_specs.cast(String).ilike(f"%{interface}%"),
+                Hardware.interface.is_(None) # Allow NULL if interface is requested
             ))
 
         if temp:
@@ -68,8 +79,17 @@ class ProductRepository:
             ))
 
         if extra_filter:
-            # Search inside the JSONB extra_specs field
-            filters.append(Hardware.extra_specs.cast(String).ilike(f"%{extra_filter}%"))
+            # Handle comma-separated filters (e.g., "PIN,display")
+            tags = [tag.strip() for tag in extra_filter.split(",") if tag.strip()]
+            for tag in tags:
+                tag_filters = [Hardware.extra_specs.cast(String).ilike(f"%{tag}%")]
+                
+                # Synonym mapping: PIN -> Keypad/Keys
+                if tag.upper() == "PIN":
+                    tag_filters.append(Hardware.extra_specs.cast(String).ilike("%Keypad%"))
+                    tag_filters.append(Hardware.extra_specs.cast(String).ilike("%Keys%"))
+                
+                filters.append(or_(*tag_filters))
 
         if query:
             filters.append(or_(

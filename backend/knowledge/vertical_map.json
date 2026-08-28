@@ -1,0 +1,40 @@
+{
+  "_description": "Maps user-described industries/verticals to canonical use cases in the database. The LLM uses this to translate free-text industry descriptions into queryable use_case values.",
+  "mappings": {
+    "parking": {
+      "canonical": "Parking Payment Systems",
+      "aliases": ["parking lot", "parking garage", "parking structure", "car park", "valet"],
+      "typical_needs": ["outdoor rated", "contactless", "PIN entry", "high volume"]
+    },
+    "transit": {
+      "canonical": "Transit Payment Solutions",
+      "aliases": ["bus", "train", "metro", "subway", "light rail", "fare collection", "ticketing"],
+      "typical_needs": ["contactless", "high durability", "fast transaction", "outdoor"]
+    },
+    "retail": {
+      "canonical": "Loyalty Program Contactless Readers",
+      "aliases": ["store", "shop", "pos", "point of sale", "checkout", "counter", "boutique"],
+      "typical_needs": ["contactless", "compact", "countertop", "USB"]
+    },
+    "vending": {
+      "canonical": "Vending Payment Systems",
+      "aliases": ["vending machine", "kiosk", "self-service", "unattended", "automated retail"],
+      "typical_needs": ["compact", "low power", "durable", "standalone"]
+    },
+    "ev_charging": {
+      "canonical": "EV Charging Station Payment Solutions",
+      "aliases": ["ev", "electric vehicle", "charging station", "charge point", "tesla"],
+      "typical_needs": ["outdoor", "weatherproof", "contactless", "standalone"]
+    },
+    "hospitality": {
+      "canonical": "Loyalty Program Contactless Readers",
+      "aliases": ["hotel", "restaurant", "cafe", "bar", "dining", "food service"],
+      "typical_needs": ["contactless", "countertop", "portable", "tip support"]
+    },
+    "healthcare": {
+      "canonical": "Loyalty Program Contactless Readers",
+      "aliases": ["hospital", "clinic", "doctor", "medical", "pharmacy", "dentist"],
+      "typical_needs": ["contactless", "hygienic", "countertop", "HIPAA-compatible"]
+    }
+  }
+}
