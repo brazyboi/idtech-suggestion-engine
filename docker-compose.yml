@@ -47,22 +47,23 @@ services:
     develop:
       watch:
         # Sync source files instantly — no rebuild
+        # (paths are relative to this compose file, i.e. the repo root)
         - action: sync
-          path: ./src
+          path: ./frontend/src
           target: /app/src
 
         # Sync public assets
         - action: sync
-          path: ./public
+          path: ./frontend/public
           target: /app/public
 
         # Rebuild image when dependencies change
         - action: rebuild
-          path: package.json
+          path: ./frontend/package.json
 
         # Rebuild on config changes
         - action: rebuild
-          path: vite.config.ts
+          path: ./frontend/vite.config.ts
 
 volumes:
   pgdata:

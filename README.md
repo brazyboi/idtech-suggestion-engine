@@ -12,17 +12,13 @@ The repository is organized into three main components:
 
 ## Data & Database Setup
 
-The project uses PostgreSQL as its primary database. To simplify local development, the data team provides a Docker-based setup:
+The project uses PostgreSQL as its primary database. The root `docker-compose.yml` provisions it automatically:
 
-1. **SQL Scripts**: Pre-configured schema and initial data are located in `backend/db_scripts/`.
-2. **Docker Compose**: A dedicated `docker-compose.yml` (located in `backend/`) allows for quick database provisioning.
-
-To set up the database:
 ```bash
-cd backend
-docker-compose up -d db
+docker compose up -d db
 ```
-This will automatically execute the SQL scripts in `backend/db_scripts/` to initialize your local database instance.
+
+On first startup, Postgres automatically runs every SQL script in `backend/db_scripts/` (in alphabetical order) to create the schema and seed initial data — nothing else to run by hand. See [Getting Started](#getting-started) below for the full stack.
 
 ## CI/CD and Gitflow
 
@@ -48,9 +44,8 @@ The CI pipeline is triggered on every Pull Request targeting `master` or `releas
 ## Project Structure
 
 ```
-├── docker-compose.yml       # Root compose for full application
+├── docker-compose.yml       # Compose for the full application (db + backend + frontend)
 ├── backend/
-│   ├── docker-compose.yml   # Database-focused compose
 │   ├── main.py              # FastAPI app entry point
 │   ├── db/                   # Database models and session management
 │   ├── db_scripts/           # SQL initialization scripts provided by data team
@@ -82,57 +77,35 @@ The CI pipeline is triggered on every Pull Request targeting `master` or `releas
 cp backend/.env.example backend/.env
 ```
 
-Open `backend/.env` and add your OpenAI API key and update the `DATABASE_URL` if needed:
+Open `backend/.env` and add your OpenAI API key. The default `DATABASE_URL` in the example file already points at the `db` service's hostname inside Docker's network — leave it as-is for step 2 below.
 
-```
-OPENAI_API_KEY=sk-your-actual-key
-DATABASE_URL=postgresql://admin:ics1802026@localhost:5432/product_db
-```
+The app now fails fast at startup if `OPENAI_API_KEY` (or `OPENAI_ADMIN_KEY`) is missing, with a clear error — so if the backend container won't start, check `docker compose logs backend` first.
 
-### 2. Run with Docker (Recommended)
+### 2. Run with Docker (Recommended — works the same on Windows, Mac, and Linux)
 
-To start the full stack (Frontend, Backend, and Database):
+This is the only startup path you need. One command starts the database, backend, and frontend together:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 - **Backend** at http://localhost:8000
 - **Frontend** at http://localhost:5173
+- **Database** at localhost:5432 (seeded automatically from `backend/db_scripts/` on first run)
 
-### 3. Quick Backend Startup (One Command)
+Stop everything with `Ctrl+C`, or `docker compose down` to also remove the containers (add `-v` to also wipe the database volume and reseed from scratch next time).
 
-From the repo root:
+### 3. Running without Docker (optional, for local iteration)
 
-```bash
-./start-backend.ps1
-```
-
-On Windows Command Prompt:
-
-```bash
-start-backend.cmd
-```
-
-What this does:
-- Starts the backend DB container (`docker compose up -d db`) unless you pass `-NoDb`
-- Creates `backend/.venv` if it does not exist
-- Installs backend dependencies
-- Runs FastAPI with reload at `http://localhost:8000`
-
-Optional flags:
-- `-SkipInstall` to skip `pip install`
-- `-NoDb` to skip starting Docker DB
-
-### 4. Running without Docker
+Start Postgres however you like (or reuse the Docker one: `docker compose up -d db`), then:
 
 **Backend:**
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-cd ..
+python -m venv backend/.venv
+source backend/.venv/bin/activate  # or backend\.venv\Scripts\activate on Windows
+pip install -r backend/requirements.txt
+export DATABASE_URL=postgresql://admin:ics1802026@localhost:5432/product_db  # note: localhost, not `db`, outside Docker's network
+export OPENAI_API_KEY=sk-your-actual-key
 python -m uvicorn backend.main:app --reload --port 8000
 ```
 
@@ -147,12 +120,25 @@ npm run dev
 
 **Backend:**
 ```bash
-cd backend
-pytest ../tests/backend
+pytest tests/backend
 ```
 
 **Frontend:**
 ```bash
 cd frontend
 npm test
+```
+
+## Example Chat Interaction
+
+A qualification flow that reaches a recommendation typically looks like:
+
+```
+Use case: Parking Payment Systems
+Environment: Outdoor (-20C to 65C)
+Card types: Contact (chip), Contactless (tap), Magstripe (swipe)
+PIN: Yes, PIN required
+Standalone: Host-controlled
+Host interface: RS232 (or USB / Ethernet)
+Display: Yes, display needed
 ```
