@@ -10,11 +10,21 @@ import os
 from typing import Any, Dict, List
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Add project root to sys.path so `from backend.xxx import yyy` works
 _project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
+
+# backend/main.py fails fast at import time if no OpenAI key is configured
+# (see backend/main.py). Tests never make real OpenAI calls — they always
+# mock them — so seed a harmless placeholder rather than requiring a real
+# key to run the suite. Only takes effect if the environment didn't
+# already provide a real one.
+os.environ.setdefault("OPENAI_API_KEY", "test-key-for-pytest")
 
 from backend.engine.state_machine import (
     CollectedInfo,
@@ -24,6 +34,76 @@ from backend.engine.state_machine import (
     TransactionProfile,
     LeadInfo,
 )
+
+
+# ── Database fixtures (in-memory SQLite, isolated per test) ────────────
+#
+# The real app talks to Postgres (backend/db/session.py), but every model
+# in backend/db/models/ is plain SQLAlchemy with no Postgres-specific
+# column types, so an in-memory SQLite DB is a faithful, fast substitute
+# for repository- and API-level tests. Each test gets a fresh schema.
+
+@pytest.fixture
+def db_session():
+    """A fresh in-memory SQLite session with all tables created."""
+    from backend.db.base import Base
+    import backend.db.models  # noqa: F401 - registers all model classes on Base
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    session = TestSessionLocal()
+    session.info["sessionmaker"] = TestSessionLocal  # exposed for patch_direct_db_access
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@pytest.fixture
+def patch_direct_db_access(db_session, monkeypatch):
+    """
+    Several modules (lead_service, search_products, get_product_details) call
+    `SessionLocal()` directly instead of going through FastAPI's `get_db`
+    dependency, so overriding `get_db` alone does not redirect them to the
+    test DB. This patches `SessionLocal` at each of those import sites to a
+    sessionmaker bound to the same in-memory engine as `db_session`, so
+    writes made through them are visible to assertions made via db_session.
+    """
+    test_sessionmaker = db_session.info["sessionmaker"]
+    targets = [
+        "backend.engine.lead_service",
+        "backend.agent.tools.search_products",
+        "backend.agent.tools.get_product_details",
+    ]
+    for target in targets:
+        monkeypatch.setattr(f"{target}.SessionLocal", test_sessionmaker)
+    return test_sessionmaker
+
+
+@pytest.fixture
+def api_client(db_session):
+    """
+    A FastAPI TestClient wired to the in-memory SQLite session via a
+    get_db override, so router tests never touch the real Postgres DB.
+    """
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.db.session import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 def _make_collected(**overrides) -> CollectedInfo:

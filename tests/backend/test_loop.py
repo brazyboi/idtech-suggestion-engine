@@ -366,6 +366,90 @@ class TestProcessMessageFullLoop:
         assert response.recommendation.hardware_name == "VP3300"
 
 
+# ── MAX_TOOL_ROUNDS safety limit ────────────────────────────────────────
+
+class TestMaxToolRoundsFallback:
+    """
+    Guards the MAX_TOOL_ROUNDS stopping condition: if the model keeps
+    requesting tool calls forever (a misbehaving/looping model, or a tool
+    whose result never satisfies it), the loop must bail out with a safe
+    fallback response instead of looping indefinitely or crashing.
+    """
+
+    @patch("backend.agent.loop.classify_intent")
+    @patch("backend.agent.loop.extract_slots")
+    @patch("backend.agent.loop.OpenAI")
+    @patch.dict("backend.agent.loop.TOOL_MAP", {"search_products": MagicMock()}, clear=False)
+    def test_exhausting_tool_rounds_returns_safe_fallback(
+        self, mock_openai: MagicMock, mock_extract: MagicMock, mock_classify: MagicMock
+    ):
+        mock_classify.return_value = ("product_search", 1.0, {})
+        mock_extract.return_value = {}
+
+        from backend.agent.loop import TOOL_MAP, MAX_TOOL_ROUNDS
+        TOOL_MAP["search_products"].return_value = {"products": [], "count": 0, "constraints_used": {}}
+
+        # Every round, the model asks for another tool call and never stops.
+        tool_call = MagicMock()
+        tool_call.id = "call_n"
+        tool_call.function.name = "search_products"
+        tool_call.function.arguments = "{}"
+
+        looping_choice = MagicMock()
+        looping_choice.message.content = None
+        looping_choice.message.tool_calls = [tool_call]
+        looping_choice.finish_reason = "tool_calls"
+
+        mock_instance = mock_openai.return_value
+        mock_instance.chat.completions.create.return_value = MagicMock(choices=[looping_choice])
+
+        session = ConversationSession(id="test")
+        response = _run_process_message("find me something", session)
+
+        # Bailed out after exactly MAX_TOOL_ROUNDS calls to the LLM, not more.
+        assert mock_instance.chat.completions.create.call_count == MAX_TOOL_ROUNDS
+        assert response.type == "clarification"
+        assert "trouble" in response.text.lower() or "connect" in response.text.lower()
+        # The conversation history and turn count must still advance normally
+        # so the session isn't left in an inconsistent state.
+        assert session.turn_count == 1
+        assert session.history[-1]["role"] == "assistant"
+
+
+class TestOpenAiCallFailureFallback:
+    """
+    A raw OpenAI SDK error (timeout, rate limit, connection error, etc.)
+    during the chat completion call must degrade to the same safe
+    fallback response as MAX_TOOL_ROUNDS exhaustion — not propagate up
+    as an unhandled exception that the router turns into a bare 500.
+    """
+
+    @patch("backend.agent.loop.classify_intent")
+    @patch("backend.agent.loop.extract_slots")
+    @patch("backend.agent.loop.OpenAI")
+    def test_openai_error_returns_safe_fallback_without_raising(
+        self, mock_openai: MagicMock, mock_extract: MagicMock, mock_classify: MagicMock
+    ):
+        from openai import APITimeoutError
+
+        mock_classify.return_value = ("greeting", 1.0, {})
+        mock_extract.return_value = {}
+
+        mock_instance = mock_openai.return_value
+        mock_instance.chat.completions.create.side_effect = APITimeoutError(request=MagicMock())
+
+        session = ConversationSession(id="test")
+        response = _run_process_message("hello", session)
+
+        assert response.type == "clarification"
+        assert "trouble" in response.text.lower() or "connect" in response.text.lower()
+        # Only tried once per round — no unbounded retry loop inside process_message
+        # (the SDK's own internal retries are separate and already exhausted
+        # by the time the exception reaches this code).
+        assert mock_instance.chat.completions.create.call_count == 1
+        assert session.turn_count == 1
+
+
 # ── Helper ──────────────────────────────────────────────────────────────
 
 def _run_process_message(message: str, session: ConversationSession) -> ChatResponse:
