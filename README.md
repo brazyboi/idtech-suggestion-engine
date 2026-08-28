@@ -129,6 +129,11 @@ cd frontend
 npm test
 ```
 
+## Architecture
+
+For the agent's design (workflow pattern, tool structure) and the list of
+known trade-offs and open issues, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ## Example Chat Interaction
 
 A qualification flow that reaches a recommendation typically looks like:

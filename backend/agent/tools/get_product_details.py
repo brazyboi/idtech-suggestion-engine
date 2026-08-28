@@ -34,14 +34,18 @@ def get_product_details(model_name: str) -> Dict[str, Any]:
         if not rows:
             return {"error": f"No product found matching '{model_name}'."}
 
-        # Find exact match
+        # Exact match only - don't guess and return the wrong product
         matching = None
         for hw in rows:
             if hw.model_name.lower() == model_name.lower():
                 matching = hw
                 break
         if not matching:
-            matching = rows[0]  # Fall back to first result
+            candidates = [hw.model_name for hw in rows[:5]]
+            return {
+                "error": f"No exact match for '{model_name}'.",
+                "did_you_mean": candidates,
+            }
 
         specs = {
             "model_name": matching.model_name,
