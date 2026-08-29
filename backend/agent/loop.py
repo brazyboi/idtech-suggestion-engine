@@ -21,7 +21,8 @@ import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional
+from types import SimpleNamespace
+from typing import Any, Dict, Iterator, List, Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
@@ -68,6 +69,19 @@ TOOL_MAP: Dict[str, Any] = {
     "submit_lead": _submit_lead,
     "escalate_to_sales": _escalate_to_sales,
     "capture_lead_info": _capture_lead_info,
+}
+
+# User-facing labels for the "progress" SSE event (see process_message_stream)
+# — shown as a transient status line while a tool call is in flight, so the
+# wait isn't a silent typing indicator.
+_TOOL_PROGRESS_LABELS: Dict[str, str] = {
+    "search_products": "Searching products...",
+    "get_product_details": "Checking specs...",
+    "get_solution_content": "Pulling up details...",
+    "answer_faq": "Looking that up...",
+    "submit_lead": "Saving your info...",
+    "escalate_to_sales": "Connecting you with sales...",
+    "capture_lead_info": "Noting that down...",
 }
 
 
@@ -172,6 +186,36 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
     Returns:
         A ChatResponse with the assistant's reply and any structured data.
     """
+    for event in _process_turn(message, session, stream=False):
+        if event["type"] == "done":
+            return event["response"]
+    # _process_turn always ends with a "done" event — see its docstring.
+    raise RuntimeError("agent loop ended without producing a response")
+
+
+def process_message_stream(message: str, session: ConversationSession) -> Iterator[Dict[str, Any]]:
+    """
+    Same agentic loop as process_message, but also yields "progress" events
+    (a tool call started/finished — shown as a transient status line) and
+    "token" events (incremental text of the final round) as they happen,
+    for the SSE endpoint (routers/chat.py's /api/chat/stream) to forward to
+    the client. The last event is always {"type": "done", "response": ...},
+    carrying the same ChatResponse process_message would have returned.
+    """
+    yield from _process_turn(message, session, stream=True)
+
+
+def _process_turn(message: str, session: ConversationSession, stream: bool) -> Iterator[Dict[str, Any]]:
+    """
+    Shared implementation behind process_message and process_message_stream.
+
+    Always ends by yielding exactly one {"type": "done", "response": ChatResponse}
+    event, after any number of "progress"/"token" events. When stream=False,
+    the LLM call itself is never streamed (so mocking
+    client.chat.completions.create's return value in tests works exactly as
+    before) and no "token" events are produced — only process_message_stream
+    passes stream=True.
+    """
     trace = ReasoningTrace(turn_id=f"turn-{session.turn_count}")
 
     # ── 1 & 2. Classify intent and extract slots concurrently ──
@@ -201,12 +245,13 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
         session.history.append({"role": "user", "content": message})
         session.history.append({"role": "assistant", "content": text})
         session.turn_count += 1
-        return ChatResponse(
+        yield {"type": "done", "response": ChatResponse(
             type="clarification",
             text=text,
             new_info=new_info,
             next_state=determine_next_state(session.collected_info),
-        )
+        )}
+        return
 
     if intent == "escalate":
         contact = {
@@ -222,13 +267,14 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
         session.history.append({"role": "user", "content": message})
         session.history.append({"role": "assistant", "content": text})
         session.turn_count += 1
-        return ChatResponse(
+        yield {"type": "done", "response": ChatResponse(
             type="clarification",
             text=text,
             ui_actions=["offer_booking"],
             new_info=new_info,
             next_state=ConversationState.HANDOFF,
-        )
+        )}
+        return
 
     if intent == "chitchat":
         # Build a context-aware redirect based on what's been collected so far
@@ -252,12 +298,13 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
         session.history.append({"role": "user", "content": message})
         session.history.append({"role": "assistant", "content": text})
         session.turn_count += 1
-        return ChatResponse(
+        yield {"type": "done", "response": ChatResponse(
             type="clarification",
             text=text,
             new_info=new_info,
             next_state=determine_next_state(session.collected_info),
-        )
+        )}
+        return
 
     # ── 4. Build the agent loop ──
     tools = get_tools_for_intent(intent)
@@ -322,20 +369,67 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
         )
 
     for round_num in range(MAX_TOOL_ROUNDS):
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                tools=tools,
-                tool_choice="auto" if not lead_submitted_this_turn else "none",
-                messages=messages,
-            )
-        except OpenAIError:
-            logger.exception("OpenAI call failed on turn %d, round %d", session.turn_count, round_num)
-            return _safe_fallback()
+        tool_choice = "auto" if not lead_submitted_this_turn else "none"
+        if stream:
+            try:
+                chunk_stream = client.chat.completions.create(
+                    model="gpt-4o",
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    messages=messages,
+                    stream=True,
+                )
+            except OpenAIError:
+                logger.exception("OpenAI call failed on turn %d, round %d", session.turn_count, round_num)
+                yield {"type": "done", "response": _safe_fallback()}
+                return
 
-        choice = response.choices[0]
-        reply_message = choice.message
-        finish_reason = choice.finish_reason
+            # Accumulate content and tool-call chunks. finish_reason == "tool_calls"
+            # rounds don't normally carry content, so content deltas can be
+            # forwarded live as "token" events without knowing in advance
+            # whether this ends up being the final (text) round or a
+            # tool-call round — see ARCHITECTURE.md / Package F notes.
+            content_parts: List[str] = []
+            tool_calls_acc: Dict[int, Dict[str, str]] = {}
+            finish_reason: Optional[str] = None
+            for chunk in chunk_stream:
+                delta = chunk.choices[0].delta
+                if chunk.choices[0].finish_reason:
+                    finish_reason = chunk.choices[0].finish_reason
+                if delta.content:
+                    content_parts.append(delta.content)
+                    yield {"type": "token", "delta": delta.content}
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        acc = tool_calls_acc.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                        if tc.id:
+                            acc["id"] = tc.id
+                        if tc.function and tc.function.name:
+                            acc["name"] += tc.function.name
+                        if tc.function and tc.function.arguments:
+                            acc["arguments"] += tc.function.arguments
+
+            reply_tool_calls = [
+                SimpleNamespace(id=acc["id"], function=SimpleNamespace(name=acc["name"], arguments=acc["arguments"]))
+                for _, acc in sorted(tool_calls_acc.items())
+            ] or None
+            reply_message = SimpleNamespace(content="".join(content_parts) or None, tool_calls=reply_tool_calls)
+        else:
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    messages=messages,
+                )
+            except OpenAIError:
+                logger.exception("OpenAI call failed on turn %d, round %d", session.turn_count, round_num)
+                yield {"type": "done", "response": _safe_fallback()}
+                return
+
+            choice = response.choices[0]
+            reply_message = choice.message
+            finish_reason = choice.finish_reason
 
         # Log the trace
         trace.tool_called(reply_message.content or "(no content)", {})
@@ -372,7 +466,7 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
             elif products_this_turn and not session.lead_submitted:
                 ui_actions = ["show_products"]
 
-            return ChatResponse(
+            yield {"type": "done", "response": ChatResponse(
                 type=resp_type,  # type: ignore
                 text=final_text,
                 recommendation=recommendation,
@@ -380,10 +474,24 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
                 ui_actions=ui_actions,
                 new_info=new_info,
                 next_state=next_state,
-            )
+            )}
+            return
 
         # ── Handle tool calls ──
-        messages.append(reply_message)  # Append assistant message with tool_calls
+        # A plain dict (not the raw SDK message object) so the streaming
+        # path's SimpleNamespace stand-in serializes the same way the
+        # non-streaming path's real ChatCompletionMessage does.
+        assistant_msg: Dict[str, Any] = {"role": "assistant", "content": reply_message.content}
+        if reply_message.tool_calls:
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in reply_message.tool_calls
+            ]
+        messages.append(assistant_msg)
 
         for tool_call in reply_message.tool_calls:
             tool_name = tool_call.function.name
@@ -394,12 +502,19 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
 
             tool_names_used.append(tool_name)
             trace.tool_called(tool_name, tool_args)
+            yield {
+                "type": "progress",
+                "stage": "tool_call",
+                "tool": tool_name,
+                "message": _TOOL_PROGRESS_LABELS.get(tool_name, "Working on it..."),
+            }
 
             # Execute the tool
             result_str = _dispatch_tool(tool_name, tool_args, session)
             result = json.loads(result_str)
 
             trace.tool_result(tool_name, result_str[:200])
+            yield {"type": "progress", "stage": "tool_result", "tool": tool_name}
 
             # Collect structured data from results
             if tool_name == "search_products" and "products" in result:
@@ -428,7 +543,7 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
             })
 
     # ── MAX_TOOL_ROUNDS reached — safe fallback ──
-    return _safe_fallback()
+    yield {"type": "done", "response": _safe_fallback()}
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────

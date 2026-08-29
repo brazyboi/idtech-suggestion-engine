@@ -447,6 +447,97 @@ class TestProcessMessageFullLoop:
         assert response.recommendation.hardware_name == "VP3300"
 
 
+# ── process_message_stream() — SSE event generator (Package F2/F3) ─────
+
+def _chunk(content=None, tool_call_deltas=None, finish_reason=None):
+    """A MagicMock shaped like an OpenAI ChatCompletionChunk."""
+    delta = MagicMock()
+    delta.content = content
+    delta.tool_calls = None
+    if tool_call_deltas:
+        tcs = []
+        for index, tc_id, name, arguments in tool_call_deltas:
+            tc = MagicMock()
+            tc.index = index
+            tc.id = tc_id
+            tc.function.name = name
+            tc.function.arguments = arguments
+            tcs.append(tc)
+        delta.tool_calls = tcs
+    choice = MagicMock()
+    choice.delta = delta
+    choice.finish_reason = finish_reason
+    chunk = MagicMock()
+    chunk.choices = [choice]
+    return chunk
+
+
+class TestProcessMessageStream:
+    """process_message_stream must yield the same shape of "token"/"progress"
+    events the SSE router forwards, and always end with a "done" event
+    carrying the same ChatResponse process_message would have returned for
+    an equivalent (non-streamed) call."""
+
+    @patch("backend.agent.loop.classify_intent")
+    @patch("backend.agent.loop.extract_slots")
+    @patch("backend.agent.loop.OpenAI")
+    def test_streams_text_tokens_then_done(
+        self, mock_openai: MagicMock, mock_extract: MagicMock, mock_classify: MagicMock
+    ):
+        mock_classify.return_value = ("greeting", 1.0, {})
+        mock_extract.return_value = {}
+
+        mock_instance = mock_openai.return_value
+        mock_instance.chat.completions.create.return_value = iter([
+            _chunk(content="Hi"),
+            _chunk(content=" there!", finish_reason="stop"),
+        ])
+
+        from backend.agent.loop import process_message_stream
+        session = ConversationSession(id="test")
+        events = list(process_message_stream("hello", session))
+
+        token_events = [e for e in events if e["type"] == "token"]
+        assert [e["delta"] for e in token_events] == ["Hi", " there!"]
+        assert events[-1]["type"] == "done"
+        assert events[-1]["response"].text == "Hi there!"
+        # process_message_stream must still advance session state exactly
+        # like process_message does.
+        assert session.turn_count == 1
+
+    @patch("backend.agent.loop.classify_intent")
+    @patch("backend.agent.loop.extract_slots")
+    @patch("backend.agent.loop.OpenAI")
+    @patch.dict("backend.agent.loop.TOOL_MAP", {"search_products": MagicMock()}, clear=False)
+    def test_emits_progress_events_around_tool_calls(
+        self, mock_openai: MagicMock, mock_extract: MagicMock, mock_classify: MagicMock
+    ):
+        mock_classify.return_value = ("product_search", 1.0, {})
+        mock_extract.return_value = {}
+
+        from backend.agent.loop import TOOL_MAP
+        TOOL_MAP["search_products"].return_value = {"products": [], "count": 0, "constraints_used": {}}
+
+        mock_instance = mock_openai.return_value
+        mock_instance.chat.completions.create.side_effect = [
+            iter([_chunk(
+                tool_call_deltas=[(0, "call_1", "search_products", '{"use_case": "retail"}')],
+                finish_reason="tool_calls",
+            )]),
+            iter([_chunk(content="No luck finding a match.", finish_reason="stop")]),
+        ]
+
+        from backend.agent.loop import process_message_stream
+        session = ConversationSession(id="test")
+        events = list(process_message_stream("what do you have for retail", session))
+
+        progress_events = [e for e in events if e["type"] == "progress"]
+        assert [e["stage"] for e in progress_events] == ["tool_call", "tool_result"]
+        assert progress_events[0]["tool"] == "search_products"
+        assert events[-1]["type"] == "done"
+        assert events[-1]["response"].text == "No luck finding a match."
+
+
 # ── MAX_TOOL_ROUNDS safety limit ────────────────────────────────────────
 
 class TestMaxToolRoundsFallback:

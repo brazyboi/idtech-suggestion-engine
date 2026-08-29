@@ -9,6 +9,7 @@ in-memory SQLite DB; the only thing mocked is the OpenAI call inside
 process_message, since that's an external network dependency.
 """
 
+import json
 from unittest.mock import patch
 
 from backend.llm.contracts import ChatResponse
@@ -270,3 +271,100 @@ class TestRateLimiting:
 
             second = api_client.post("/api/chat", json={"message": "hi again", "session_id": session_id})
             assert second.status_code == 429
+
+
+# ── /api/chat/stream ─────────────────────────────────────────────────
+
+def _sse_events(resp) -> list:
+    """Parse `data: <json>\\n\\n` lines out of an SSE response body."""
+    events = []
+    for line in resp.text.split("\n\n"):
+        line = line.strip()
+        if line.startswith("data: "):
+            events.append(json.loads(line[len("data: "):]))
+    return events
+
+
+class TestChatStreamEndpoint:
+    def test_forwards_progress_token_and_done_events(self, api_client):
+        fake_response = ChatResponse(type="clarification", text="Hi there!")
+
+        def fake_stream(message, session):
+            yield {"type": "progress", "stage": "tool_call", "tool": "search_products", "message": "Searching products..."}
+            yield {"type": "progress", "stage": "tool_result", "tool": "search_products"}
+            yield {"type": "token", "delta": "Hi "}
+            yield {"type": "token", "delta": "there!"}
+            yield {"type": "done", "response": fake_response}
+
+        with patch("backend.routers.chat.process_message_stream", side_effect=fake_stream):
+            resp = api_client.post("/api/chat/stream", json={"message": "hello"})
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        events = _sse_events(resp)
+        assert events[0] == {"type": "progress", "stage": "tool_call", "tool": "search_products", "message": "Searching products..."}
+        assert events[2] == {"type": "token", "delta": "Hi "}
+        assert events[-1]["type"] == "done"
+        assert events[-1]["response"]["text"] == "Hi there!"
+        assert events[-1]["response"]["session_id"]
+
+    def test_persists_session_and_reuses_session_id(self, api_client):
+        def _bump_turn_count(message, session):
+            session.turn_count += 1
+            yield {"type": "done", "response": ChatResponse(type="clarification", text=f"turn {session.turn_count}")}
+
+        with patch("backend.routers.chat.process_message_stream", side_effect=_bump_turn_count):
+            first = api_client.post("/api/chat/stream", json={"message": "one"})
+            session_id = _sse_events(first)[-1]["response"]["session_id"]
+            second = api_client.post("/api/chat/stream", json={"message": "two", "session_id": session_id})
+
+        assert _sse_events(first)[-1]["response"]["text"] == "turn 1"
+        assert _sse_events(second)[-1]["response"]["text"] == "turn 2"
+
+    def test_turn_cap_returns_429_before_streaming_starts(self, api_client):
+        from backend.routers.chat import MAX_SESSION_TURNS
+
+        create_resp = api_client.post("/api/session")
+        session_id = create_resp.json()["session_id"]
+
+        def _bump_turn_count(message, session):
+            session.turn_count = MAX_SESSION_TURNS
+            yield {"type": "done", "response": ChatResponse(type="clarification", text="ok")}
+
+        with patch("backend.routers.chat.process_message_stream", side_effect=_bump_turn_count):
+            first = api_client.post("/api/chat/stream", json={"message": "hi", "session_id": session_id})
+            assert first.status_code == 200
+
+            second = api_client.post("/api/chat/stream", json={"message": "hi again", "session_id": session_id})
+            assert second.status_code == 429
+
+    def test_unhandled_exception_emits_error_event_not_a_crash(self, api_client):
+        def _blow_up(message, session):
+            yield {"type": "token", "delta": "partial"}
+            raise RuntimeError("super secret internal detail")
+
+        with patch("backend.routers.chat.process_message_stream", side_effect=_blow_up):
+            resp = api_client.post("/api/chat/stream", json={"message": "hello"})
+
+        assert resp.status_code == 200  # SSE headers already sent by the time the error happens
+        events = _sse_events(resp)
+        assert events[0] == {"type": "token", "delta": "partial"}
+        assert events[-1]["type"] == "error"
+        assert "super secret internal detail" not in resp.text
+
+    def test_funnel_events_logged_even_on_mid_stream_failure(self, api_client, patch_direct_db_access):
+        """The session and funnel events must still be persisted via the
+        generator's `finally` even when the turn raises partway through —
+        not just on a clean finish."""
+        from backend.db.repositories.event_repository import EventRepository
+
+        def _blow_up(message, session):
+            yield {"type": "token", "delta": "partial"}
+            raise RuntimeError("boom")
+
+        with patch("backend.routers.chat.process_message_stream", side_effect=_blow_up):
+            resp = api_client.post("/api/chat/stream", json={"message": "hello"})
+
+        assert resp.status_code == 200
+        counts = EventRepository(patch_direct_db_access()).funnel_counts()
+        assert counts["session_started"] == 1
