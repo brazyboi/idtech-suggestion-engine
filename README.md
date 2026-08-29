@@ -79,7 +79,9 @@ cp backend/.env.example backend/.env
 
 Open `backend/.env` and add your OpenAI API key. The default `DATABASE_URL` in the example file already points at the `db` service's hostname inside Docker's network — leave it as-is for step 2 below.
 
-The app now fails fast at startup if `OPENAI_API_KEY` (or `OPENAI_ADMIN_KEY`) is missing, with a clear error — so if the backend container won't start, check `docker compose logs backend` first.
+Also set `ADMIN_API_KEY` and `SESSION_SECRET_KEY` to random values (e.g. `openssl rand -hex 32` for each) — these gate `/admin` and session-transcript access respectively. To reach the admin portal at `/admin`, enter the same `ADMIN_API_KEY` value at its login prompt.
+
+The app now fails fast at startup if `OPENAI_API_KEY` (or `OPENAI_ADMIN_KEY`), `ADMIN_API_KEY`, or `SESSION_SECRET_KEY` is missing, with a clear error — so if the backend container won't start, check `docker compose logs backend` first.
 
 ### 2. Run with Docker (Recommended — works the same on Windows, Mac, and Linux)
 
@@ -92,12 +94,15 @@ docker compose up --build
 - **Backend** at http://localhost:8000
 - **Frontend** at http://localhost:5173
 - **Database** at localhost:5432 (seeded automatically from `backend/db_scripts/` on first run)
+- **Redis** at localhost:6379 (conversation sessions — see below)
 
 Stop everything with `Ctrl+C`, or `docker compose down` to also remove the containers (add `-v` to also wipe the database volume and reseed from scratch next time).
 
+Conversation sessions are stored in Redis so they survive a `docker compose restart backend` and are shared across multiple backend worker processes. If Redis is unreachable, the backend degrades to serving each chat turn with a fresh session rather than erroring — conversations just won't persist until Redis is back.
+
 ### 3. Running without Docker (optional, for local iteration)
 
-Start Postgres however you like (or reuse the Docker one: `docker compose up -d db`), then:
+Start Postgres however you like (or reuse the Docker one: `docker compose up -d db`). Redis is optional outside Docker — without a `REDIS_URL`, sessions fall back to an in-memory store (fine for local iteration, just won't survive a restart). Then:
 
 **Backend:**
 ```bash
@@ -106,6 +111,8 @@ source backend/.venv/bin/activate  # or backend\.venv\Scripts\activate on Window
 pip install -r backend/requirements.txt
 export DATABASE_URL=postgresql://admin:ics1802026@localhost:5432/product_db  # note: localhost, not `db`, outside Docker's network
 export OPENAI_API_KEY=sk-your-actual-key
+export ADMIN_API_KEY=$(openssl rand -hex 32)
+export SESSION_SECRET_KEY=$(openssl rand -hex 32)
 python -m uvicorn backend.main:app --reload --port 8000
 ```
 
@@ -115,6 +122,21 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Deploying / embedding the chat widget
+
+By default the API only accepts browser requests from `http://localhost:5173` (the Vite dev server). To serve the widget from another origin — e.g. embedding it on the live site — set `CORS_ALLOW_ORIGINS` to the origin(s) the page is served from, comma-separated:
+
+```bash
+CORS_ALLOW_ORIGINS=https://idtechproducts.com,https://www.idtechproducts.com
+```
+
+Include the scheme and omit any trailing slash. `www` and non-`www` are different origins, so list both if both are used. The allowed origins are logged at startup, so `docker compose logs backend` will confirm what the server actually loaded.
+
+Two things to check before exposing this publicly:
+
+- **`ADMIN_API_KEY` and `SESSION_SECRET_KEY` must be real random secrets**, not the placeholder values from `.env.example`. They gate lead PII (`/api/lead/*`) and catalog mutation (`/api/maintenance/*`); the app refuses to start if either is unset, but it can't tell whether the value is a real secret.
+- **Rate limiting is per client IP.** Behind a reverse proxy or load balancer, the app sees the *proxy's* IP unless the proxy sets `X-Forwarded-For` and the app is configured to trust it — otherwise all traffic shares a single rate-limit bucket. Worth verifying against your actual deployment topology, since `/api/chat` is public and every request costs an OpenAI call.
 
 ## Running Tests
 
