@@ -17,6 +17,16 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -29,9 +39,12 @@ services:
     environment:
       # Override DATABASE_URL to point at the 'db' container instead of localhost
       DATABASE_URL: postgresql://admin:ics1802026@db:5432/product_db
+      REDIS_URL: redis://redis:6379/0
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:
