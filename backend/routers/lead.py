@@ -4,11 +4,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.db.repositories.event_repository import EventRepository
 from backend.db.repositories.lead_repository import LeadRepository
 from backend.db.session import get_db
 from backend.engine.lead_service import LeadService, get_lead_service
 
 router = APIRouter()
+
+
+class FunnelMetrics(BaseModel):
+    sessions_started: int
+    recommendations_shown: int
+    leads_captured: int
+    recommendation_rate: Optional[float] = None
+    conversion_rate: Optional[float] = None
+    close_rate: Optional[float] = None
 
 
 class RequestCallRequest(BaseModel):
@@ -75,6 +85,28 @@ async def list_leads(
         )
         for lead in leads
     ]
+
+
+@router.get("/metrics", response_model=FunnelMetrics)
+async def get_funnel_metrics(db: Session = Depends(get_db)):
+    """
+    Resolution-rate view for the admin dashboard: how many conversations
+    started, how many got as far as a recommendation, and how many
+    converted to a captured lead (submit_lead or escalate_to_sales).
+    """
+    counts = EventRepository(db).funnel_counts()
+    started = counts["session_started"]
+    shown = counts["recommendation_shown"]
+    captured = counts["lead_submitted"]
+
+    return FunnelMetrics(
+        sessions_started=started,
+        recommendations_shown=shown,
+        leads_captured=captured,
+        recommendation_rate=(shown / started) if started else None,
+        conversion_rate=(captured / started) if started else None,
+        close_rate=(captured / shown) if shown else None,
+    )
 
 
 @router.get("/leads/{lead_id}", response_model=LeadOut)
