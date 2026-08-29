@@ -49,9 +49,7 @@ import httpx
 
 REPORT_PATH = Path(__file__).parent / "load_test_results.json"
 
-# A handful of tool-heavy messages (see test_latency_baseline_tool_heavy.py)
-# so concurrent turns actually drive the multi-round agent loop instead of
-# a cheap FAQ short-circuit — the realistic worst case for concurrent load.
+# Tool-heavy messages exercise the multi-round loop under concurrent load.
 TURN_MESSAGES = [
     "We're a parking operator looking for an outdoor payment terminal, "
     "no host computer nearby, PIN entry and contactless required, about "

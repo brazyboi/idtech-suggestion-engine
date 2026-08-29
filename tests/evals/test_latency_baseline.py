@@ -38,12 +38,7 @@ from openai.resources.chat.completions import Completions
 from backend.agent.loop import process_message
 from backend.engine.state_machine import ConversationSession
 
-# Representative messages spanning the paths a real conversation takes:
-# greeting, product search, qualification answers (short + descriptive),
-# named-product spec questions (the get_product_details bypass), FAQ topics,
-# lead capture, escalation, and chitchat. Each runs in its own fresh
-# session — this baselines single-turn latency per path, not a full
-# multi-turn conversation.
+# Representative single-turn messages cover the main conversation paths.
 MESSAGES: List[str] = [
     "Hi, what can you help me with?",
     "What do you have for outdoor parking payment terminals?",
@@ -91,11 +86,7 @@ def _summarize(label: str, values: List[float]) -> Dict[str, Any]:
 
 class TestLatencyBaseline:
     def test_per_turn_latency_by_phase(self, seeded_catalog, monkeypatch):
-        # Patch the OpenAI SDK's Completions.create at the class level so
-        # every call the agent loop makes — inside classify_intent,
-        # extract_slots, and each agent round — is timed and tagged by
-        # model, regardless of which of the module's own OpenAI() client
-        # instances issues it.
+        # Patch the SDK method so every model call is timed and tagged.
         original_create = Completions.create
         call_records: List[Dict[str, Any]] = []
 

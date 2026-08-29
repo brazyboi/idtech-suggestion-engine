@@ -1,9 +1,4 @@
-/**
- * Admin API key handling for the /admin surface (see ARCHITECTURE.md D1).
- * The backend gates /api/lead/* and /api/maintenance/* behind a shared
- * X-Admin-Api-Key header. The key is entered at runtime via AdminLayout's
- * login gate and kept in sessionStorage — never baked into the JS bundle.
- */
+/** Runtime admin-key storage and request headers for the /admin surface. */
 const ADMIN_KEY_STORAGE_KEY = "idtech_admin_api_key";
 
 export function getAdminKey(): string | null {

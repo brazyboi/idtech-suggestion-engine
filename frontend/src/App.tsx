@@ -39,9 +39,7 @@ const normalizeBotText = (raw: string): string => {
   return lines.join("\n\n");
 };
 
-/** Turns a finished ChatResponse into the bot Message fields onSend needs to
- * apply — shared between the streamed "done" event and any other caller
- * that already has a full ChatResponse in hand. */
+/** Converts a ChatResponse into the bot message fields used by onSend. */
 function applyChatResponse(
   resp: ChatResponse,
   collectedInfo: Record<string, unknown>,
@@ -132,9 +130,7 @@ function App() {
 
   useEffect(() => {
     const initSession = async () => {
-      // Resume an existing conversation if the browser still has one —
-      // otherwise a page refresh silently drops the transcript and the
-      // bot re-asks everything it already knows for this session.
+      // Resume the conversation when the browser still has a session.
       const storedSessionId = (() => {
         try {
           return localStorage.getItem(SESSION_STORAGE_KEY);
@@ -212,9 +208,7 @@ function App() {
     const botMsgId = `b-${Date.now()}`;
     let streamedText = "";
     let hasStreamedMessage = false;
-    // Token deltas arrive far faster than a re-render (and a Markdown
-    // re-parse) is worth doing — batch them into at most one state update
-    // per animation frame instead of one per token.
+    // Batch token updates to at most one render per animation frame.
     let flushPending = false;
     const flushStreamedText = () => {
       flushPending = false;

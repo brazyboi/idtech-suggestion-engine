@@ -13,13 +13,9 @@ from ...db.repositories.product_query import ProductRepository
 from ...engine.product_matcher import ProductMatcher
 from ._product_url import get_product_url
 
-# Above this similarity, auto-resolve to the top match (handles typos/spacing
-# like "vp 6300" or "VP63OO" for "VP6300"). Below it, don't guess — the
-# original poka-yoke this tool exists for (see ARCHITECTURE.md): confidently
-# describing the wrong product is worse than asking to disambiguate.
+# Auto-resolve close matches; otherwise ask for clarification instead of guessing.
 _CONFIDENT_MATCH_THRESHOLD = 0.82
-# Below this, nothing is close enough to even suggest — return a plain
-# not-found instead of a did_you_mean list of unrelated products.
+# Don't suggest unrelated products below this score.
 _SUGGESTION_FLOOR = 0.3
 
 
@@ -45,11 +41,7 @@ def get_product_details(model_name: str) -> Dict[str, Any]:
         # Use find_products with query to locate the specific model
         rows = repo.find_products(query=model_name)
         if not rows:
-            # ILIKE requires the query to be a *substring* of the real name,
-            # so a typo (e.g. "VP63OO" for "VP6300") can return zero rows
-            # even though a near-identical product exists. Fall back to the
-            # full active catalog so similarity ranking below still has a
-            # chance to find it.
+            # A typo can miss ILIKE, so rank the full catalog as a fallback.
             rows = repo.find_products()
         if not rows:
             return {"error": f"No product found matching '{model_name}'."}

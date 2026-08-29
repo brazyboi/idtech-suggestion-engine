@@ -26,9 +26,7 @@ def _normalize_db_url(db_url: str) -> str:
     return db_url
 
 
-# Fail fast, like the OPENAI_API_KEY check in main.py: no committed default
-# credential. Set SKIP_STARTUP_CHECKS=1 for tooling that imports this module
-# without needing a live database (e.g. some test collection paths).
+# Fail fast without a database URL; SKIP_STARTUP_CHECKS=1 supports tooling imports.
 if not os.getenv("DATABASE_URL") and not os.getenv("SKIP_STARTUP_CHECKS"):
     raise RuntimeError(
         "DATABASE_URL is not set. Copy backend/.env.example to backend/.env "

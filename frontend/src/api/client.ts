@@ -49,7 +49,7 @@ export interface ChatResponse {
   quick_replies?: string[];
   session_id?: string;
   recommendation?: RecommendationBundle;
-  /** Extracted info from the LLM tool call, we will merge into collected_info on the frontend. */
+  /** Lead fields extracted by an LLM tool call. */
   new_info?: Record<string, unknown>;
   /** The updated conversation state after processing this turn */
   next_state?: string;
@@ -96,10 +96,7 @@ export async function sendChatMessage(chatRequest: ChatRequest): Promise<ChatRes
 }
 
 /**
- * Streams a chat turn via SSE, invoking onEvent for each "progress"/"token"
- * event as it arrives and once more for the terminal "done"/"error" event.
- * Resolves once the stream ends (after "done"/"error") or rejects if the
- * request itself failed (non-2xx, no body).
+ * Streams a chat turn via SSE and reports each event to onEvent.
  */
 export async function sendChatMessageStream(
   chatRequest: ChatRequest,
@@ -128,9 +125,7 @@ export async function sendChatMessageStream(
     buffer += decoder.decode(value, { stream: true });
 
     let sepIndex: number;
-    // SSE events are separated by a blank line; a chunk boundary can split
-    // one mid-event, so anything after the last "\n\n" stays buffered for
-    // the next read() rather than being parsed (and dropped) as-is.
+    // Keep incomplete events buffered across network chunks.
     while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
       const rawEvent = buffer.slice(0, sepIndex).trim();
       buffer = buffer.slice(sepIndex + 2);

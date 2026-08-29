@@ -134,9 +134,7 @@ class TestConcurrentSessionsAgainstMockedOpenAI:
 
         def run_one(idx: int):
             session = ConversationSession(id=f"load-429-{idx}")
-            # Should never raise — a 429 must degrade to a fallback
-            # ChatResponse, not propagate as an exception (which the real
-            # HTTP layer would otherwise turn into a raw 500).
+            # A 429 should produce a fallback response, not an exception.
             return process_message("What outdoor terminals do you have?", session)
 
         results = []

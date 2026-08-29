@@ -615,9 +615,7 @@ class TestOpenAiCallFailureFallback:
 
         assert response.type == "clarification"
         assert "trouble" in response.text.lower() or "connect" in response.text.lower()
-        # Only tried once per round — no unbounded retry loop inside process_message
-        # (the SDK's own internal retries are separate and already exhausted
-        # by the time the exception reaches this code).
+        # The agent does not retry a failed round itself.
         assert mock_instance.chat.completions.create.call_count == 1
         assert session.turn_count == 1
 

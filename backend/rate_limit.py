@@ -28,15 +28,7 @@ from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-# Comma-separated list of IPs and/or CIDR ranges for reverse proxies /
-# load balancers that sit directly in front of this app and can be trusted
-# to set X-Forwarded-For / X-Real-IP honestly (i.e. nothing else can reach
-# this app directly). Empty by default — safe-by-default: until an operator
-# explicitly configures this for their topology, the header is never
-# trusted and rate limiting falls back to the raw connecting peer's IP.
-#
-# Example: TRUSTED_PROXY_IPS=10.0.0.0/8,172.17.0.1  (a VPC range and a
-# single load balancer/nginx-sidecar IP). See README "Deploying" section.
+# Trusted proxy IPs/CIDRs. Empty by default, so forwarded headers are ignored.
 def _parse_trusted_proxies(raw: str) -> List["ipaddress._BaseNetwork"]:
     networks = []
     for entry in raw.split(","):
@@ -78,9 +70,7 @@ def get_client_ip(request: Request) -> str:
 
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        # Left-most entry is the original client; each trusted hop appends
-        # its own address to the right, so this is the value the trusted
-        # proxy itself vouched for.
+        # The left-most address is the client reported by the trusted proxy.
         client_ip = forwarded_for.split(",")[0].strip()
         if client_ip:
             return client_ip

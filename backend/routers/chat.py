@@ -20,9 +20,7 @@ from backend.rate_limit import limiter
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Caps a single conversation's turns — /api/chat is unauthenticated and
-# every turn costs an OpenAI call, so without a ceiling a scripted client
-# reusing one session_id could still run up an unbounded bill (see D3).
+# Cap unauthenticated conversations to limit provider cost.
 MAX_SESSION_TURNS = int(os.getenv("MAX_SESSION_TURNS", "60"))
 
 WELCOME_MESSAGE = (
@@ -168,15 +166,7 @@ async def chat_endpoint(
         was_recommendation_shown = session.collected_info.meta.recommendation_shown
         was_lead_submitted = session.lead_submitted
 
-        # run_in_threadpool: process_message() is synchronous and blocks on
-        # real network I/O (OpenAI calls, DB queries) for a second or more
-        # per turn. Calling it directly here (an `async def` endpoint) would
-        # run it straight on the single asyncio event-loop thread, blocking
-        # every other concurrent request for the full duration of this
-        # turn — a load test (tests/evals/load_test_concurrent_chat.py,
-        # H3) showed exactly this: 10 concurrent sessions serialized into
-        # tens of seconds of latency per turn. /api/chat/stream already
-        # does this for the same reason (see _next_or_done below).
+        # Keep blocking model and database work off the event loop.
         response = await run_in_threadpool(
             process_message,
             chat_request.message,
@@ -237,13 +227,7 @@ async def chat_stream_endpoint(
     was_lead_submitted = session.lead_submitted
 
     async def event_generator() -> AsyncIterator[str]:
-        # Drives the (sync, blocking-on-OpenAI) generator one item at a
-        # time via run_in_threadpool, rather than handing the sync
-        # generator straight to StreamingResponse, so that a client
-        # disconnect reliably triggers this function's `finally` — Starlette
-        # closes an async generator (awaiting aclose(), which raises
-        # GeneratorExit here) when it wins the race against the stream
-        # finishing, but doesn't guarantee closing a wrapped sync one.
+        # Advance the blocking generator in a worker so disconnect cleanup runs.
         gen = process_message_stream(chat_request.message, session)
         try:
             while True:
@@ -264,9 +248,7 @@ async def chat_stream_endpoint(
             yield f"data: {json.dumps({'type': 'error', 'message': 'Something went wrong processing your message. Please try again.'})}\n\n"
         finally:
             gen.close()
-            # Persist + log funnel events even if the client disconnected
-            # mid-stream — otherwise a turn that got most of the way through
-            # (e.g. submit_lead already ran) would silently not be saved.
+            # Persist funnel events even when the client disconnects.
             _finalize_turn(store, session_id, session, is_first_turn, was_recommendation_shown, was_lead_submitted)
 
     return StreamingResponse(

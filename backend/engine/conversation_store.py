@@ -18,16 +18,10 @@ logger = logging.getLogger(__name__)
 # Redis uses this as native TTL (see ARCHITECTURE.md item C).
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", str(4 * 60 * 60)))
 
-# When set, sessions persist in Redis and survive a restart / are shared
-# across worker processes. When unset, falls back to an in-memory store —
-# a legitimate dev/test mode, but NOT safe for a production deploy with
-# more than one worker (see get_conversation_store() below).
+# Redis shares sessions across workers and restarts; memory storage is for dev/test.
 REDIS_URL = os.getenv("REDIS_URL")
 
-# Kept separate from REDIS_URL rather than embedded as redis://:pw@host —
-# one fewer place a secret can end up logged (REDIS_URL itself is logged at
-# startup, see _build_store() below) and avoids URL-escaping whatever
-# characters end up in a generated password. See ARCHITECTURE.md / H2.
+# Keep the password separate so it is not exposed in logged connection URLs.
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 

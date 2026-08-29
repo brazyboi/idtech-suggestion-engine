@@ -45,11 +45,7 @@ from openai.resources.chat.completions import Completions
 from backend.agent.loop import process_message
 from backend.engine.state_machine import ConversationSession
 
-# Each of these is sent as the FIRST message of its own fresh session, but
-# carries enough information (or names a real product) that the agent
-# should be able to act — call a tool — rather than ask a clarifying
-# question back. Contrast with test_latency_baseline.py's MESSAGES, most of
-# which are deliberately partial/isolated qualification answers.
+# These first-turn messages should drive tool calls instead of clarification.
 SINGLE_TURN_TOOL_HEAVY_MESSAGES: List[str] = [
     "Does the VP6300 support WiFi and Cellular?",
     "What's the operating temperature range on the VP7200?",
@@ -64,13 +60,7 @@ SINGLE_TURN_TOOL_HEAVY_MESSAGES: List[str] = [
     "Show me your outdoor terminals that support cellular connectivity.",
 ]
 
-# A single realistic multi-turn conversation, run in ONE session so later
-# turns build on earlier ones' collected_info — the qualification ->
-# recommendation -> lead-capture flow from the README's "Example Chat
-# Interaction". Real conversations accumulate context across turns; a
-# fresh-session-per-message baseline structurally can't reach the
-# search_products / get_solution_content / submit_lead calls this flow
-# exercises.
+# This conversation measures the multi-turn qualification-to-lead flow.
 MULTI_TURN_CONVERSATION: List[str] = [
     "Hi, we need a payment terminal for our parking lots.",
     "It's for outdoor use, no host computer nearby.",

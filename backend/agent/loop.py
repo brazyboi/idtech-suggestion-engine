@@ -71,9 +71,7 @@ TOOL_MAP: Dict[str, Any] = {
     "capture_lead_info": _capture_lead_info,
 }
 
-# User-facing labels for the "progress" SSE event (see process_message_stream)
-# — shown as a transient status line while a tool call is in flight, so the
-# wait isn't a silent typing indicator.
+# Labels shown while a tool call is in flight.
 _TOOL_PROGRESS_LABELS: Dict[str, str] = {
     "search_products": "Searching products...",
     "get_product_details": "Checking specs...",
@@ -219,11 +217,7 @@ def _process_turn(message: str, session: ConversationSession, stream: bool) -> I
     trace = ReasoningTrace(turn_id=f"turn-{session.turn_count}")
 
     # ── 1 & 2. Classify intent and extract slots concurrently ──
-    # Both are independent OpenAI calls on the raw message — classify_intent
-    # never touches session state, extract_slots never touches intent — so
-    # running them sequentially was a free round-trip left on the table.
-    # process_message is sync end-to-end, so a thread pool (not
-    # asyncio.gather) is the minimal way to overlap the two blocking calls.
+    # These independent blocking calls can run in parallel.
     with ThreadPoolExecutor(max_workers=2) as executor:
         intent_future = executor.submit(classify_intent, message)
         slots_future = executor.submit(extract_slots, message, session.collected_info)
@@ -308,15 +302,7 @@ def _process_turn(message: str, session: ConversationSession, stream: bool) -> I
 
     # ── 4. Build the agent loop ──
     tools = get_tools_for_intent(intent)
-    # get_tools_for_intent("faq") doesn't include get_product_details — by
-    # design, FAQ turns don't need it. But a message naming a specific
-    # product (checked deterministically, same pattern as the FAQ-shortcut
-    # bypass above) is a spec question regardless of classified intent, and
-    # the model can't call a tool it was never offered — this isn't a
-    # prompt-wording problem, the tool was structurally unavailable. Found
-    # live: intent classified "faq" for "does the VP6300 support WiFi and
-    # Cellular?", and the model answered from its own guess instead of
-    # get_product_details, since that tool wasn't in its list at all.
+    # Named-product spec questions need the details tool even when classified as FAQ.
     if _PRODUCT_NAME_PATTERN.search(message.lower()) and not any(
         t["function"]["name"] == "get_product_details" for t in tools
     ):
@@ -337,10 +323,7 @@ def _process_turn(message: str, session: ConversationSession, stream: bool) -> I
         messages.append(msg)
     messages.append({"role": "user", "content": message})
 
-    # timeout + max_retries are explicit (not SDK defaults) so a slow/flaky
-    # OpenAI call fails predictably within a demo-acceptable window instead
-    # of hanging the request indefinitely. The SDK itself retries transient
-    # errors (connection errors, 429, 5xx) with backoff up to max_retries.
+    # Bound slow calls and retry transient provider errors.
     client = OpenAI(
         api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY"),
         timeout=20.0,
@@ -384,11 +367,7 @@ def _process_turn(message: str, session: ConversationSession, stream: bool) -> I
                 yield {"type": "done", "response": _safe_fallback()}
                 return
 
-            # Accumulate content and tool-call chunks. finish_reason == "tool_calls"
-            # rounds don't normally carry content, so content deltas can be
-            # forwarded live as "token" events without knowing in advance
-            # whether this ends up being the final (text) round or a
-            # tool-call round — see ARCHITECTURE.md / Package F notes.
+            # Forward text deltas while accumulating tool-call chunks.
             content_parts: List[str] = []
             tool_calls_acc: Dict[int, Dict[str, str]] = {}
             finish_reason: Optional[str] = None
@@ -478,9 +457,7 @@ def _process_turn(message: str, session: ConversationSession, stream: bool) -> I
             return
 
         # ── Handle tool calls ──
-        # A plain dict (not the raw SDK message object) so the streaming
-        # path's SimpleNamespace stand-in serializes the same way the
-        # non-streaming path's real ChatCompletionMessage does.
+        # Use a plain dict so streaming and non-streaming messages serialize alike.
         assistant_msg: Dict[str, Any] = {"role": "assistant", "content": reply_message.content}
         if reply_message.tool_calls:
             assistant_msg["tool_calls"] = [
@@ -562,15 +539,7 @@ _FAQ_KEYWORDS: Dict[str, List[str]] = {
     "merchant_services": ["merchant services", "merchant account", "processing", "p2pe", "interchange", "acquirer", "gateway", "echeck", "ach", "virtual terminal", "invoicing", "payment link", "boarding", "onboarding"],
 }
 
-# Model-name shapes seen across the catalog (VP3300, AP3880P, Kiosk IV,
-# SmartPIN L80, SREDKey2, MiniMag II, ...). A message naming a specific
-# product is a spec question, not a FAQ — it needs the full agent loop and
-# get_product_details, not the keyword-matched canned-answer shortcut below.
-# `\s?` between prefix and digits tolerates a stray space ("vp 6300") —
-# without it, a message differing from the real bypass trigger by exactly
-# one space silently fell back through to the FAQ shortcut (found live:
-# "does the vp 6300 support wifi?" got generic compatibility boilerplate
-# instead of ever reaching get_product_details).
+# Product-name patterns route spec questions to get_product_details.
 _PRODUCT_NAME_PATTERN = re.compile(
     r"\b(vp\s?\d{3,4}\w*|ap\s?\d{3,4}\w*|kiosk\s*(iv|v|iii)\b|smartpin(\s*l\d+)?|sredkey\s*\d*|minimag(\s*(ii|duo))?|minismart(\s*ii)?)\b",
     re.IGNORECASE,
@@ -587,11 +556,7 @@ _CONNECTIVITY_TERMS = (
 def _has_only_faq_intent(message: str) -> bool:
     """Check if the message is purely a FAQ question (not mixed with qualification)."""
     lower = message.lower().strip()
-    # A message naming a specific product is a spec question, not a FAQ —
-    # route it to the full agent loop so get_product_details can answer with
-    # real specs instead of a generic canned answer (see loop.py history:
-    # "does the VP6300 support WiFi and Cellular?" was misrouted here before
-    # this check existed).
+    # Named-product questions need real specs, not a canned FAQ answer.
     if _PRODUCT_NAME_PATTERN.search(lower):
         return False
     # If it's very short and purely a question, treat as pure FAQ
@@ -621,14 +586,10 @@ def _kw_in(lower: str, kw: str) -> bool:
 def _detect_faq_topic(message: str) -> str:
     """Detect which FAQ topic the user is asking about."""
     lower = message.lower()
-    # "does/is/can it support <spec>" is a compatibility question, not a
-    # request for customer support — check this before the generic keyword
-    # loop, where bare "support" would otherwise win.
+    # Check compatibility wording before the generic "support" keyword.
     if "support" in lower and any(_kw_in(lower, term) for term in _CONNECTIVITY_TERMS):
         return "compatibility"
-    # Same problem, merchant-services shaped: "do you support ACH?" would
-    # otherwise hit the generic "support" keyword (checked earlier in
-    # _FAQ_KEYWORDS) before ever reaching merchant_services' own keywords.
+    # Check merchant-services support questions before the generic keyword.
     if "support" in lower and any(_kw_in(lower, term) for term in _FAQ_KEYWORDS["merchant_services"]):
         return "merchant_services"
     for topic, keywords in _FAQ_KEYWORDS.items():

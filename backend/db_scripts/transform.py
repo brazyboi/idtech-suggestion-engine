@@ -26,7 +26,7 @@ def process_files():
                     model_name = clean_model_name(file)
 
                     raw_specs = {}
-                    # Extract HTML tables - they are nested in blocks -> lines -> spans
+                    # Tables are nested under blocks, lines, and spans.
                     for page in data.get('pdf_info', []):
                         for block in page.get('para_blocks', []):
                             # Search recursively for 'html' in the block structure
@@ -41,7 +41,7 @@ def process_files():
                                                         for row in soup.find_all('tr'):
                                                             cells = [td.get_text(strip=True) for td in row.find_all('td')]
                                                             if len(cells) >= 2:
-                                                                # The key is usually the second to last cell
+                                                                # The final two cells contain the key and value.
                                                                 key = cells[-2].lower()
                                                                 val = cells[-1]
                                                                 raw_specs[key] = val
@@ -82,7 +82,7 @@ def process_files():
                     stmt = f"INSERT INTO hardware (model_name, operate_temperature, input_power, ip_rating, ik_rating, interface, extra_specs) VALUES ('{model_name}', {final_fields['operate_temperature']}, {final_fields['input_power']}, {final_fields['ip_rating']}, {final_fields['ik_rating']}, {final_fields['interface']}, '{json.dumps(extra_specs)}');"
                     sql_statements.append(stmt)
                     
-    # Write output to a file, you need to change to different file name without overwriting the current one
+    # Keep generated SQL separate from the source data.
     with open("backend/db_scripts/insert_hardware.sql", "w") as out_f:
         out_f.write("\n".join(sql_statements))
     print(f"Generated {len(sql_statements)} INSERT statements in backend/db_scripts/insert_hardware.sql")

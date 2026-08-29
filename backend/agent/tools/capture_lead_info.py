@@ -14,11 +14,7 @@ from ...engine.state_machine import ConversationSession
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _PHONE_RE = re.compile(r"^[\d\s()+\-.]{7,20}$")
 
-# Spec/connectivity terms observed live in a hallucinated capture: for "Does
-# the VP6300 support WiFi and Cellular?" the model called
-# capture_lead_info(company="WiFi and Cellular"), writing junk into the lead
-# record. These terms never legitimately appear in a person's name or
-# company name, so treat their presence as a signal of a bad extraction.
+# Reject spec terms that the model may mistake for a name or company.
 _IMPLAUSIBLE_TERMS = (
     "wifi", "wi-fi", "cellular", "bluetooth", "ethernet", "usb", "nfc",
     "emv", "contactless", "magstripe", "rs232", "serial", "pin pad",

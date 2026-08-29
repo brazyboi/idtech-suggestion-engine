@@ -16,14 +16,7 @@ const navLinks = [
 type AuthStatus = "checking" | "authed" | "unauthed";
 
 export default function AdminLayout() {
-  // Client-side gate for UX only — the real boundary is the backend's
-  // X-Admin-Api-Key check on every /api/lead/* and /api/maintenance/*
-  // request (see ARCHITECTURE.md D1). A key's mere presence in
-  // sessionStorage doesn't mean it's still valid (revoked, or left over
-  // from a prior failed attempt), so a stored key is re-verified against
-  // the backend before showing admin UI — otherwise a stale key renders
-  // the full admin page with every request 401ing and no way back to the
-  // login form.
+  // Re-verify stored keys before showing the admin UI; the backend remains the real gate.
   const [status, setStatus] = useState<AuthStatus>(() => (getAdminKey() ? "checking" : "unauthed"));
 
   useEffect(() => {
@@ -95,10 +88,7 @@ function AdminLogin({ onAuthed }: { onAuthed: () => void }) {
       }
       onAuthed();
     } catch (err) {
-      // Clear the rejected key rather than leaving it in sessionStorage.
-      // AdminLayout seeds `authed` from getAdminKey(), so a stored-but-
-      // invalid key means a refresh renders the admin UI with every
-      // request 401ing and no way back to this form.
+      // Do not retain a key that failed verification.
       clearAdminKey();
       setError(err instanceof Error ? err.message : "Unable to verify admin key");
     } finally {

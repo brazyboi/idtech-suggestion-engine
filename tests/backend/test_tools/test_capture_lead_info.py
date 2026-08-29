@@ -112,9 +112,7 @@ class TestCaptureLeadInfo:
         session.collected_info.lead.name = "Alice"
         # Try to capture empty string
         result = capture_lead_info(name="", session=session)
-        # Empty string is truthy in Python after strip? Let's check: "".strip() == ""
-        # So the condition `if name and not lead.name` — name is "" which is falsy
-        # So it should be no_new_info
+        # An empty name is falsy, so no information should be captured.
         assert result["status"] == "no_new_info"
         assert session.collected_info.lead.name == "Alice"  # Unchanged
 

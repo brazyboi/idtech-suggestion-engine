@@ -9,9 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-# Ensure the project root is on sys.path so absolute imports resolve,
-# regardless of whether we run `uvicorn main:app` (from backend/)
-# or `uvicorn backend.main:app` (from project root) or `python -m uvicorn ...`
+# Support both `uvicorn main:app` and `uvicorn backend.main:app` imports.
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -19,18 +17,9 @@ if _project_root not in sys.path:
 # Load environment variables before importing routers
 load_dotenv()
 
-# Fail fast on missing config: without this, the app boots "successfully"
-# and every chat request silently falls back to a fake "test-key" (see
-# agent/classifier.py and agent/loop.py), which only surfaces as a
-# confusing OpenAI auth error deep inside a request instead of an obvious
-# startup failure. Set SKIP_STARTUP_CHECKS=1 to bypass (e.g. for tooling
-# that imports this module without needing the chat feature to work).
+# Fail fast on missing config; set SKIP_STARTUP_CHECKS=1 for tooling imports.
 
-# Placeholder value shipped in backend/.env.example for both ADMIN_API_KEY
-# and SESSION_SECRET_KEY. The non-empty checks below only catch an unset
-# var — copying .env.example to .env without editing it passes those
-# checks fine and boots "successfully" with a publicly-known secret gating
-# lead PII and session transcripts. Reject it explicitly (H5).
+# Reject the public placeholder shipped in .env.example (H5).
 _PLACEHOLDER_SECRET = "change-me-to-a-random-secret"
 
 if not os.getenv("SKIP_STARTUP_CHECKS"):
@@ -40,10 +29,7 @@ if not os.getenv("SKIP_STARTUP_CHECKS"):
             "cannot function without it. Set it in the environment or a .env "
             "file before starting the server."
         )
-    # Without these, /api/lead/* and /api/maintenance/* would boot with no
-    # admin gate (see backend/auth.py) and session transcripts would be
-    # readable by anyone holding a session_id — both silent PII leaks
-    # rather than an obvious startup failure.
+    # These secrets protect admin endpoints and session transcripts.
     if not os.getenv("ADMIN_API_KEY"):
         raise RuntimeError(
             "ADMIN_API_KEY is not set. Admin/lead endpoints cannot be safely "
@@ -89,14 +75,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-# CORS middleware. Origins come from CORS_ALLOW_ORIGINS (comma-separated)
-# so the widget can be embedded on idtechproducts.com without a code change
-# — set it to the real site origin(s) at deploy time. Defaults to the Vite
-# dev server so local development needs no configuration.
-#
-# allow_credentials is False: nothing in this app uses cookies (auth is a
-# header-based API key / session token, see auth.py), and leaving it True
-# would block a wildcard origin if staging ever needs one.
+# CORS origins come from CORS_ALLOW_ORIGINS; auth uses headers, not cookies.
 _cors_origins = [
     origin.strip()
     for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173").split(",")

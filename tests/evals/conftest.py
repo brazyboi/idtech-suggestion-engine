@@ -88,9 +88,7 @@ def seeded_catalog(db_session, patch_direct_db_access):
             "operate_temperature": "-30C to 70C",
             "ip_rating": "IP65",
             "ik_rating": "IK07",
-            # "CPU"/"RAM"/"Processor" and "Keypad" are load-bearing here: see
-            # product_query.py's is_standalone/PIN matching, which greps
-            # extra_specs for these exact words rather than a real flag.
+            # These words drive the product query's standalone/PIN matching.
             "extra_specs": {"note": "outdoor standalone kiosk terminal with CPU and RAM, Keypad PIN entry, display"},
         },
         categories=["Parking"],

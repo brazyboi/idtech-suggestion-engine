@@ -5,31 +5,6 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  // const [isDownloading, setIsDownloading] = useState(false);
-
-  // const handleDownloadPDF = async () => {
-  //   setIsDownloading(true);
-  //   try {
-  //     const bundle: RecommendationBundle = {
-  //       hardware_name: product.name,
-  //       hardware_items: [
-  //         {
-  //           name: product.name,
-  //           role: "Recommended",
-  //         },
-  //       ],
-  //       explanation: product.description,
-  //       highlights: [],
-  //     };
-  //     const blob = await downloadRecommendationPDF(bundle);
-  //     const url = URL.createObjectURL(blob);
-  //     window.open(url, "_blank");
-  //     window.addEventListener("unload", () => URL.revokeObjectURL(url), { once: true });
-  //   } finally {
-  //     setIsDownloading(false);
-  //   }
-  // };
-
   return (
     <div className="w-full rounded-xl border border-gray-200 bg-white/80 px-5 py-4">
       <p className="text-xs uppercase tracking-wide text-secondary">Recommended Hardware</p>

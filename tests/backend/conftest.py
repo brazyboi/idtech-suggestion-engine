@@ -19,22 +19,13 @@ _project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-# backend/main.py fails fast at import time if no OpenAI key is configured
-# (see backend/main.py). Tests never make real OpenAI calls — they always
-# mock them — so seed a harmless placeholder rather than requiring a real
-# key to run the suite. Only takes effect if the environment didn't
-# already provide a real one.
+# Tests mock OpenAI, so provide a harmless key when none is configured.
 os.environ.setdefault("OPENAI_API_KEY", "test-key-for-pytest")
 
-# backend/db/session.py fails fast at import time if DATABASE_URL is unset,
-# same reasoning as OPENAI_API_KEY above. Tests use an in-memory SQLite DB
-# (see db_session fixture below), never the real Postgres URL.
+# Tests use an in-memory SQLite database.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
-# backend/main.py fails fast at import time if these are unset (see D1/D2
-# in ARCHITECTURE.md — admin endpoints and session tokens need real
-# secrets in production). Tests never need real secrecy, just a fixed
-# value the test client can present.
+# Tests only need fixed local values for admin and session authentication.
 os.environ.setdefault("ADMIN_API_KEY", "test-admin-key-for-pytest")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-for-pytest")
 
@@ -50,10 +41,7 @@ from backend.engine.state_machine import (
 
 # ── Database fixtures (in-memory SQLite, isolated per test) ────────────
 #
-# The real app talks to Postgres (backend/db/session.py), but every model
-# in backend/db/models/ is plain SQLAlchemy with no Postgres-specific
-# column types, so an in-memory SQLite DB is a faithful, fast substitute
-# for repository- and API-level tests. Each test gets a fresh schema.
+# SQLite is a fast substitute for these repository and API tests.
 
 @pytest.fixture
 def db_session():
