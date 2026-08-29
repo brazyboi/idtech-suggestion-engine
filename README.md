@@ -323,6 +323,21 @@ Only requests arriving from those peers may use `X-Forwarded-For` or `X-Real-IP`
 
 Point the orchestrator's readiness probe at `/ready`, not `/`. `/` only confirms that the process is running; `/ready` checks PostgreSQL and Redis.
 
+### OpenAI capacity and throttling
+
+The application rate limits protect the service from a single browser, but they do not increase the OpenAI account quota. The current account should be treated as having an approximately **30,000 tokens-per-minute (TPM)** provider ceiling. This is an account and billing-tier limit, not a constant of the application; verify it in the OpenAI account before each deployment.
+
+A tool-heavy product-finder turn normally makes two `gpt-4o-mini` calls (intent classification and requirement extraction) plus one or more `gpt-4o` agent rounds. With the current prompts and observed traffic, plan for roughly **5–10 new conversations per minute** before provider throttling begins to show up as added latency. That is an operating estimate, not a guaranteed capacity: prompt size, response length, tool rounds, and the current OpenAI tier all affect it.
+
+When the provider throttles, requests may spend longer retrying and can eventually return the application's safe clarification response instead of a recommendation. Before increasing expected traffic, raise the OpenAI billing/rate-limit tier if needed and rerun the live concurrent load test against the production-like stack:
+
+```bash
+python tests/evals/load_test_concurrent_chat.py \
+  --base-url https://api.example.com \
+  --sessions 10 \
+  --turns 2
+```
+
 ### PostgreSQL
 
 The Compose database settings are development defaults. The repository currently uses the `admin` user and a sample password in `docker-compose.yml`, and publishes PostgreSQL on host port `5432` for local access. Before a public deployment, replace the database credentials with deployment-managed secrets, update both the `db` environment and the backend's `DATABASE_URL`, and remove the host port publish unless an approved operator workflow genuinely needs it. Do not expose PostgreSQL directly to the public internet.
@@ -357,6 +372,7 @@ To enable SMTP notifications, configure `SMTP_USER` and `SMTP_PASS` in `backend/
 - **Database initialization:** SQL files in `backend/db_scripts/` are seed/initialization scripts, not a general migration system. Existing database volumes are not automatically updated when those files change.
 - **No exact product match:** the finder may relax constraints and disclose a closest fit, or the assistant may escalate instead. This is intentional; it is safer than claiming unsupported compatibility.
 - **Latency:** the simple sequential/general-turn baseline includes many short-circuit turns and understates recommendation latency. Use the tool-heavy report and concurrent load test when evaluating Product Finder performance.
+- **OpenAI quota:** the current account is expected to have a roughly 30K TPM ceiling. Tool-heavy traffic may begin throttling around 5–10 new conversations per minute; increase the provider tier and re-measure before scaling beyond that estimate.
 - **Sales follow-up promise:** the assistant's follow-up timing is only accurate if someone monitors `/admin/leads` or SMTP notifications are configured and working.
 
 ## API and user flows
