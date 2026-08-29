@@ -85,16 +85,6 @@ const sections = [
     label: "Manage Use Cases",
     description: "Curate the use cases tied to recommendations.",
   },
-  {
-    href: "/admin/prompts",
-    label: "Manage Prompts",
-    description: "Inspect prompt tooling and future prompt management.",
-  },
-  {
-    href: "/admin/docs",
-    label: "Manage Docs",
-    description: "Inspect documentation tooling and future document management.",
-  },
 ];
 
 export default function Dashboard() {

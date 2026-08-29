@@ -23,7 +23,7 @@ export default function EditCategory() {
         setError(null);
         setSubmitting(true);
         try {
-            const res = await adminFetch(`http://localhost:8000/api/maintenance/categories/${name}`, {
+            const res = await adminFetch(`/api/maintenance/categories/${name}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: form.name.trim() }),

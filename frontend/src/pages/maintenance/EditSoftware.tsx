@@ -23,7 +23,7 @@ export default function EditSoftware() {
         setError(null);
         setSubmitting(true);
         try {
-            const res = await adminFetch(`http://localhost:8000/api/maintenance/software/${name}`, {
+            const res = await adminFetch(`/api/maintenance/software/${name}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: form.name.trim() }),

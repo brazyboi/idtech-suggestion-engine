@@ -22,7 +22,7 @@ export default function AddUseCase() {
         setError(null);
         setSubmitting(true);
         try {
-            const res = await adminFetch("http://localhost:8000/api/maintenance/use-cases", {
+            const res = await adminFetch("/api/maintenance/use-cases", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: form.name.trim() }),

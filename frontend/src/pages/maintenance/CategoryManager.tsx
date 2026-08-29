@@ -24,7 +24,7 @@ export default function CategoryManager() {
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-        adminFetch("http://localhost:8000/api/maintenance/categories/")
+        adminFetch("/api/maintenance/categories/")
             .then((res) => {
                 if (!res.ok) throw new Error(`Server error: ${res.status}`);
                 return res.json();
@@ -41,7 +41,7 @@ export default function CategoryManager() {
         if (selectedId === null || selectedCategory === null) return;
         setDeleting(true);
         try {
-            const res = await adminFetch(`http://localhost:8000/api/maintenance/categories/${selectedCategory.name}`, {
+            const res = await adminFetch(`/api/maintenance/categories/${selectedCategory.name}`, {
                 method: "DELETE",
             });
             if (!res.ok) {

@@ -28,7 +28,6 @@ The frontend admin area is available at `/admin` and currently supports:
 - Hardware creation, editing, and soft deletion.
 - Software management.
 - Category and use-case management.
-- Prompt and documentation management through their admin routes.
 
 The catalog is database-backed. Categories and use cases shown to the assistant are read from the database so admin edits can be reflected in later conversations.
 
@@ -256,7 +255,7 @@ There are currently no admin usernames, individual accounts, roles, or SSO integ
 The backend remains the real authorization boundary. The protected API surfaces are:
 
 - `/api/lead/*` — lead PII and funnel metrics.
-- `/api/maintenance/*` — hardware, software, category, use-case, prompt, and documentation changes.
+- `/api/maintenance/*` — hardware, software, category, and use-case changes.
 
 The customer chat endpoints remain public so the embedded widget can work without an admin credential. Existing conversation transcripts require the signed `X-Session-Token` issued when the session is created.
 
@@ -365,7 +364,7 @@ To enable SMTP notifications, configure `SMTP_USER` and `SMTP_PASS` in `backend/
 ## Known limitations and operational issues
 
 - **Shared admin credential:** authorization is one shared `ADMIN_API_KEY`; there is no per-user audit identity, role management, SSO, or password reset flow.
-- **Admin frontend deployment:** some maintenance screens still contain development-oriented `http://localhost:8000` API URLs. Verify and update those screens before serving the admin portal from a non-localhost deployment.
+- **Admin frontend deployment:** admin requests use the shared `VITE_API_BASE_URL` setting when an external API origin is needed; otherwise they use relative `/api` paths, which work with the Vite development proxy or a same-origin production deployment.
 - **Development frontend server:** Docker Compose currently serves the Vite development server. A public deployment should build and serve the frontend with a production web server or CDN rather than treating the Vite dev server as the final public asset server.
 - **Development database settings:** the checked-in Compose file contains local bootstrap credentials and publishes PostgreSQL for development convenience. Treat them as non-production defaults and harden them before deployment.
 - **Redis failure behavior:** the chat service can continue a turn with a fresh, unpersisted session when Redis is unavailable, so a request may succeed without conversation continuity. `/ready` still reports the instance unhealthy.

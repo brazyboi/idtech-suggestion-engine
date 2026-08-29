@@ -67,7 +67,7 @@ from backend.engine.conversation_store import get_conversation_store
 from backend.rate_limit import limiter
 from backend.routers import chat, pdf
 from backend.routers import lead as lead_router
-from backend.routers.maintenance import hardware, software, prompts, docs
+from backend.routers.maintenance import hardware, software
 
 app = FastAPI(title="ID TECH Suggestion Engine")
 
@@ -105,8 +105,6 @@ app.include_router(
 _admin_dep = [Depends(require_admin_key)]
 app.include_router(hardware.router, prefix="/api/maintenance/hardware", tags=["Maintenance Hardware"], dependencies=_admin_dep)
 app.include_router(software.router, prefix="/api", tags=["Maintenance Software"], dependencies=_admin_dep) # router in software.py contains "maintenance" prefix
-app.include_router(prompts.router, prefix="/api/maintenance/prompts", tags=["Maintenance Prompts"], dependencies=_admin_dep)
-app.include_router(docs.router, prefix="/api/maintenance/docs", tags=["Maintenance Docs"], dependencies=_admin_dep)
 
 @app.get("/")
 async def root():

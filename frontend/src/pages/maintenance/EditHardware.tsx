@@ -42,7 +42,7 @@ export default function EditHardware() {
     }
 
     useEffect(() => {
-        adminFetch(`http://localhost:8000/api/maintenance/hardware/${name}`)
+        adminFetch(`/api/maintenance/hardware/${name}`)
             .then((res) => {
                 if (!res.ok) throw new Error(`Server error: ${res.status}`);
                 return res.json();
@@ -65,9 +65,9 @@ export default function EditHardware() {
 
     useEffect(() => {
         Promise.all([
-            adminFetch("http://localhost:8000/api/maintenance/categories").then((r) => r.json()),
-            adminFetch("http://localhost:8000/api/maintenance/use-cases").then((r) => r.json()),
-            adminFetch("http://localhost:8000/api/maintenance/software").then((r) => r.json()),
+            adminFetch("/api/maintenance/categories").then((r) => r.json()),
+            adminFetch("/api/maintenance/use-cases").then((r) => r.json()),
+            adminFetch("/api/maintenance/software").then((r) => r.json()),
         ]).then(([cats, useCases, sw]) => {
             setOptions({
                 categories: cats.map((x: { name: string }) => x.name),
@@ -96,7 +96,7 @@ export default function EditHardware() {
                 use_cases: form.use_cases,
                 software: form.software,
             };
-            const res = await adminFetch(`http://localhost:8000/api/maintenance/hardware/${name}`, {
+            const res = await adminFetch(`/api/maintenance/hardware/${name}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

@@ -35,7 +35,7 @@ export default function HardwareManager() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    adminFetch("http://localhost:8000/api/maintenance/hardware/")
+    adminFetch("/api/maintenance/hardware/")
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Server error: ${res.status}`);
@@ -66,7 +66,7 @@ export default function HardwareManager() {
 
     setDeleting(true);
     try {
-      const res = await adminFetch(`http://localhost:8000/api/maintenance/hardware/${selectedDevice.model_name}`, {
+      const res = await adminFetch(`/api/maintenance/hardware/${selectedDevice.model_name}`, {
         method: "DELETE",
       });
       if (!res.ok) {

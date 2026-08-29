@@ -24,7 +24,7 @@ export default function UseCaseManager() {
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-        adminFetch("http://localhost:8000/api/maintenance/use-cases/")
+        adminFetch("/api/maintenance/use-cases/")
             .then((res) => {
                 if (!res.ok) throw new Error(`Server error: ${res.status}`);
                 return res.json();
@@ -41,7 +41,7 @@ export default function UseCaseManager() {
         if (selectedId === null || selectedUseCase === null) return;
         setDeleting(true);
         try {
-            const res = await adminFetch(`http://localhost:8000/api/maintenance/use-cases/${selectedUseCase.name}`, {
+            const res = await adminFetch(`/api/maintenance/use-cases/${selectedUseCase.name}`, {
                 method: "DELETE",
             });
             if (!res.ok) {

@@ -22,7 +22,7 @@ export default function SoftwareManager() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    adminFetch("http://localhost:8000/api/maintenance/software/")
+    adminFetch("/api/maintenance/software/")
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Server error: ${res.status}`);
@@ -48,7 +48,7 @@ export default function SoftwareManager() {
 
     setDeleting(true);
     try {
-      const res = await adminFetch(`http://localhost:8000/api/maintenance/software/${selectedDevice.name}`, {
+      const res = await adminFetch(`/api/maintenance/software/${selectedDevice.name}`, {
         method: "DELETE",
       });
       if (!res.ok) {

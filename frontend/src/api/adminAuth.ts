@@ -1,4 +1,6 @@
 /** Runtime admin-key storage and request headers for the /admin surface. */
+import { withApiBase } from "./apiBase";
+
 const ADMIN_KEY_STORAGE_KEY = "idtech_admin_api_key";
 
 export function getAdminKey(): string | null {
@@ -36,7 +38,7 @@ function adminHeaders(extra?: HeadersInit): HeadersInit {
 
 /** fetch() wrapper that attaches the admin API key header to every admin request. */
 export async function adminFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(input, {
+  return fetch(withApiBase(input), {
     ...init,
     headers: adminHeaders(init.headers),
   });

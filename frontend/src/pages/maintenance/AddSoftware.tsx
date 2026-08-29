@@ -31,7 +31,7 @@ export default function AddSoftware() {
             const payload = {
                 name: form.software_name.trim(),
             };
-            const res = await adminFetch("http://localhost:8000/api/maintenance/software/", {
+            const res = await adminFetch("/api/maintenance/software/", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

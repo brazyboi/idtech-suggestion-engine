@@ -23,7 +23,7 @@ export default function EditUseCase() {
         setError(null);
         setSubmitting(true);
         try {
-            const res = await adminFetch(`http://localhost:8000/api/maintenance/use-cases/${name}`, {
+            const res = await adminFetch(`/api/maintenance/use-cases/${name}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: form.name.trim() }),

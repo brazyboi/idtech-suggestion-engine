@@ -18,8 +18,6 @@ import EditCategory from "./pages/maintenance/EditCategory";
 import UseCaseManager from "./pages/maintenance/UseCaseManager";
 import AddUseCase from "./pages/maintenance/AddUseCase";
 import EditUseCase from "./pages/maintenance/EditUseCase";
-import PromptManager from "./pages/maintenance/PromptManager";
-import DocManager from "./pages/maintenance/DocManager";
 import LeadsManager from "./pages/maintenance/LeadsManager";
 
 const SESSION_STORAGE_KEY = "idtech_chat_session_id";
@@ -361,8 +359,6 @@ function App() {
           <Route path="use-cases" element={<UseCaseManager />} />
           <Route path="use-cases/add" element={<AddUseCase />} />
           <Route path="use-cases/edit/:name" element={<EditUseCase />} />
-          <Route path="prompts" element={<PromptManager />} />
-          <Route path="docs" element={<DocManager />} />
         </Route>
       </Routes>
     </Router>

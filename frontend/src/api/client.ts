@@ -1,3 +1,5 @@
+import { withApiBase } from "./apiBase";
+
 export interface ChatRequest {
   message: string;
   session_id?: string;
@@ -71,13 +73,8 @@ export interface PDFRequest {
   explanation: string;
 }
 
-const API_BASE =
-  (globalThis as { __VITE_API_BASE_URL__?: string }).__VITE_API_BASE_URL__ ??
-  (typeof process !== "undefined" ? process.env.VITE_API_BASE_URL : undefined) ??
-  "";
-
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await fetch(withApiBase(path), init);
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || `Request failed: ${response.status}`);
@@ -103,7 +100,7 @@ export async function sendChatMessageStream(
   onEvent: (event: ChatStreamEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/chat/stream`, {
+  const response = await fetch(withApiBase("/api/chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(chatRequest),
