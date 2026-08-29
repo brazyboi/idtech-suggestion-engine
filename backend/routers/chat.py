@@ -1,15 +1,25 @@
 import logging
-from typing import Any, Dict, Optional
+import os
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.agent.loop import process_message
+from backend.auth import issue_session_token, verify_session_token
+from backend.db.repositories.event_repository import EventRepository
+from backend.db.session import session_scope
 from backend.engine.conversation_store import ConversationStore, get_conversation_store
 from backend.llm.contracts import ChatResponse
+from backend.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Caps a single conversation's turns — /api/chat is unauthenticated and
+# every turn costs an OpenAI call, so without a ceiling a scripted client
+# reusing one session_id could still run up an unbounded bill (see D3).
+MAX_SESSION_TURNS = int(os.getenv("MAX_SESSION_TURNS", "60"))
 
 WELCOME_MESSAGE = (
     "Hi, I'm ID TECH Agent! I can help answer your questions "
@@ -25,33 +35,93 @@ class ChatRequest(BaseModel):
 
 class SessionCreateResponse(BaseModel):
     session_id: str
+    session_token: str
     message: str
     stage: str
 
 
+class SessionResumeResponse(BaseModel):
+    session_id: str
+    exists: bool
+    history: List[Dict[str, str]]
+    stage: Optional[str] = None
+
+
+def _log_funnel_event(session_id: str, event_type: str) -> None:
+    """Best-effort funnel logging — never let a DB hiccup break a chat turn."""
+    try:
+        with session_scope() as db:
+            EventRepository(db).log_event(session_id, event_type)
+    except Exception:
+        logger.exception("Failed to log funnel event '%s' for session %s", event_type, session_id)
+
+
 @router.post("/session", response_model=SessionCreateResponse)
+@limiter.limit("10/minute")
 async def create_session(
+    request: Request,
     store: ConversationStore = Depends(get_conversation_store),
 ):
     session_id = store.ensure_session(None)
     return SessionCreateResponse(
         session_id=session_id,
+        session_token=issue_session_token(session_id),
         message=WELCOME_MESSAGE,
         stage="greeting",
     )
 
 
+@router.get("/session/{session_id}", response_model=SessionResumeResponse)
+async def resume_session(
+    session_id: str,
+    x_session_token: Optional[str] = Header(default=None, alias="X-Session-Token"),
+    store: ConversationStore = Depends(get_conversation_store),
+):
+    """
+    Used by the frontend to rehydrate a conversation after a page refresh
+    (session_id is persisted in localStorage). Returns the raw message
+    history so far so the transcript can be redrawn.
+
+    Requires the signed session_token issued at session creation — a bare
+    session_id (logged in access logs, sitting in localStorage) isn't
+    enough on its own to read someone else's transcript (see D2).
+    """
+    if not store.has_session(session_id):
+        return SessionResumeResponse(session_id=session_id, exists=False, history=[])
+    if not verify_session_token(session_id, x_session_token):
+        raise HTTPException(status_code=403, detail="Missing or invalid session token")
+    session = store.get_session(session_id)
+    return SessionResumeResponse(
+        session_id=session_id,
+        exists=True,
+        history=session.history,
+        stage=session.intent,
+    )
+
+
 @router.post("/chat")
+@limiter.limit("20/minute")
 async def chat_endpoint(
-    request: ChatRequest,
+    request: Request,
+    chat_request: ChatRequest,
     store: ConversationStore = Depends(get_conversation_store),
 ):
     try:
-        session_id = store.ensure_session(request.session_id)
+        session_id = store.ensure_session(chat_request.session_id)
         session = store.get_session(session_id)  # deep copy
 
+        if session.turn_count >= MAX_SESSION_TURNS:
+            raise HTTPException(
+                status_code=429,
+                detail="This conversation has reached its turn limit. Please start a new session.",
+            )
+
+        is_first_turn = len(session.history) == 0
+        was_recommendation_shown = session.collected_info.meta.recommendation_shown
+        was_lead_submitted = session.lead_submitted
+
         response = process_message(
-            message=request.message,
+            message=chat_request.message,
             session=session,
         )
 
@@ -63,9 +133,20 @@ async def chat_endpoint(
         # collected_info, lead_submitted, etc. are all updated).
         store.save_session(session_id, session)
 
+        # Funnel events — feeds the resolution-rate metric on the admin
+        # dashboard (previously no conversion visibility existed at all).
+        if is_first_turn:
+            _log_funnel_event(session_id, "session_started")
+        if not was_recommendation_shown and session.collected_info.meta.recommendation_shown:
+            _log_funnel_event(session_id, "recommendation_shown")
+        if not was_lead_submitted and session.lead_submitted:
+            _log_funnel_event(session_id, "lead_submitted")
+
         return payload
+    except HTTPException:
+        raise
     except Exception:
-        logger.exception("chat_endpoint failed for session %s", request.session_id)
+        logger.exception("chat_endpoint failed for session %s", chat_request.session_id)
         raise HTTPException(
             status_code=500,
             detail="Something went wrong processing your message. Please try again.",
