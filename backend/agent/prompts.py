@@ -53,6 +53,7 @@ You are a sales specialist at ID TECH, a payment hardware company. Your job is t
 4. Never ask more than one question per turn, and never call submit_lead more than once per session.
 5. Never use the words "lead" or "lead capture" with the customer. Say "contact details" or "your information" instead.
 6. If search_products returns zero results, be honest: let them know there isn't an exact match and offer to connect them with a specialist.
+7. If search_products returns a non-empty `constraints_relaxed`, the results are NOT an exact match — one or more of the customer's requirements (e.g. category, use case, interface, or other specs) couldn't be satisfied and were dropped to find the closest fit. You MUST disclose this plainly, e.g. "I couldn't find an exact match on [the relaxed requirement] — here's the closest fit," before presenting the products. Never present a relaxed result as if it satisfied everything requested.
 
 ## Current Stage
 {stage}
@@ -190,20 +191,60 @@ def _build_known_summary(collected: CollectedInfo) -> str:
     return summary
 
 
-def _build_valid_values_section() -> str:
-    """Build a section listing valid use_case/category values from the knowledge files."""
-    vmap = _load_vertical_map()
-    mappings = vmap.get("mappings", {})
+def _get_db_valid_values() -> tuple[List[str], List[str]] | None:
+    """Fetch the current valid category and use_case names directly from the DB.
 
-    use_cases = sorted(set(
-        m.get("canonical", k) for k, m in mappings.items()
-    ))
+    Categories and use_cases are admin-editable, so the model must see what's
+    actually in the DB right now rather than a hand-maintained file that can
+    drift. Returns None if the DB is unreachable so the caller can fall back.
+    """
+    try:
+        from ..db.session import SessionLocal
+        from ..db.repositories.admin_repository import AdminRepository
+
+        db = SessionLocal()
+        try:
+            repo = AdminRepository(db)
+            categories = sorted({c.name for c in repo.list_categories()})
+            use_cases = sorted({u.name for u in repo.list_use_cases()})
+            return categories, use_cases
+        finally:
+            db.close()
+    except Exception:
+        return None
+
+
+def _build_valid_values_section() -> str:
+    """Build a section listing valid use_case/category values.
+
+    Sourced live from the DB on every turn (see _get_db_valid_values). Falls
+    back to vertical_map.json's canonical use cases if the DB can't be
+    reached — vertical_map.json itself is no longer the source of truth here
+    since its 7 mappings collapse to only 5 unique canonical use cases.
+    """
+    db_values = _get_db_valid_values()
+
+    if db_values is not None:
+        categories, use_cases = db_values
+    else:
+        vmap = _load_vertical_map()
+        mappings = vmap.get("mappings", {})
+        use_cases = sorted(set(
+            m.get("canonical", k) for k, m in mappings.items()
+        ))
+        categories = []
 
     lines = [
         "## Valid Use Case Values (use these exactly when calling search_products)",
     ]
     for uc in use_cases:
         lines.append(f"- {uc}")
+
+    if categories:
+        lines.append("")
+        lines.append("## Valid Category Values (use these exactly when calling search_products)")
+        for cat in categories:
+            lines.append(f"- {cat}")
 
     return "\n".join(lines)
 

@@ -28,11 +28,11 @@ SEARCH_PRODUCTS_TOOL: Dict[str, Any] = {
             "properties": {
                 "use_case": {
                     "type": "string",
-                    "description": "The customer's industry/vertical: parking, transit, retail, vending, EV charging, hospitality, healthcare."
+                    "description": "The customer's industry/vertical. Must exactly match one of the 'Valid Use Case Values' listed in the system prompt for this turn — do not guess or invent one."
                 },
                 "category": {
                     "type": "string",
-                    "description": "Product category if known: card reader, PIN pad, all-in-one terminal, display."
+                    "description": "Product category if known. Must exactly match one of the 'Valid Category Values' listed in the system prompt for this turn — do not guess or invent one."
                 },
                 "input_power": {
                     "type": "string",
