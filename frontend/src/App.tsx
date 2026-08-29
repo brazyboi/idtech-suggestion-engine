@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import { createSession, sendChatMessage, type ChatResponse } from "./api/client";
+import { createSession, resumeSession, sendChatMessage, type ChatResponse } from "./api/client";
 import ChatWindow from "./components/ChatWindow";
 import DebugPanel from "./components/DebugPanel";
 import type { Message, Product } from "./types/messages";
@@ -21,6 +21,9 @@ import EditUseCase from "./pages/maintenance/EditUseCase";
 import PromptManager from "./pages/maintenance/PromptManager";
 import DocManager from "./pages/maintenance/DocManager";
 import LeadsManager from "./pages/maintenance/LeadsManager";
+
+const SESSION_STORAGE_KEY = "idtech_chat_session_id";
+const SESSION_TOKEN_STORAGE_KEY = "idtech_chat_session_token";
 
 const normalizeBotText = (raw: string): string => {
   const lines = raw
@@ -54,10 +57,55 @@ function App() {
 
   useEffect(() => {
     const initSession = async () => {
+      // Resume an existing conversation if the browser still has one —
+      // otherwise a page refresh silently drops the transcript and the
+      // bot re-asks everything it already knows for this session.
+      const storedSessionId = (() => {
+        try {
+          return localStorage.getItem(SESSION_STORAGE_KEY);
+        } catch {
+          return null;
+        }
+      })();
+      const storedSessionToken = (() => {
+        try {
+          return localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+        } catch {
+          return null;
+        }
+      })();
+
+      if (storedSessionId && storedSessionToken) {
+        try {
+          const resumed = await resumeSession(storedSessionId, storedSessionToken);
+          if (resumed.exists) {
+            setSessionId(resumed.session_id);
+            setNextState(resumed.stage);
+            setMessages(
+              resumed.history.map((entry, idx) => ({
+                id: `resumed-${idx}-${Date.now()}`,
+                role: entry.role === "user" ? "user" : "bot",
+                text: entry.content,
+              }))
+            );
+            return;
+          }
+        } catch {
+          // Fall through to starting a fresh session below.
+        }
+      }
+
       try {
         const session = await createSession();
         setSessionId(session.session_id);
         setNextState(session.stage);
+        try {
+          localStorage.setItem(SESSION_STORAGE_KEY, session.session_id);
+          localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, session.session_token);
+        } catch {
+          // Best-effort — private browsing / storage disabled is fine, it
+          // just means this tab won't survive a refresh.
+        }
         setMessages([
           {
             id: `welcome-${Date.now()}`,
@@ -93,6 +141,11 @@ function App() {
 
       if (resp.session_id) {
         setSessionId(resp.session_id);
+        try {
+          localStorage.setItem(SESSION_STORAGE_KEY, resp.session_id);
+        } catch {
+          // Best-effort, see initSession above.
+        }
       }
 
       const cleanedText = normalizeBotText(resp.text);

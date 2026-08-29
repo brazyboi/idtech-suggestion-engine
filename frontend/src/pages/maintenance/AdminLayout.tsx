@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import "./admin.css";
 import IDTechLogo from "./components/IDTechLogo";
+import { adminFetch, clearAdminKey, getAdminKey, setAdminKey } from "../../api/adminAuth";
 
 const navLinks = [
   { to: "/admin", label: "Dashboard", end: true },
@@ -11,7 +13,56 @@ const navLinks = [
   { to: "/admin/use-cases", label: "Use Cases" },
 ];
 
+type AuthStatus = "checking" | "authed" | "unauthed";
+
 export default function AdminLayout() {
+  // Client-side gate for UX only — the real boundary is the backend's
+  // X-Admin-Api-Key check on every /api/lead/* and /api/maintenance/*
+  // request (see ARCHITECTURE.md D1). A key's mere presence in
+  // sessionStorage doesn't mean it's still valid (revoked, or left over
+  // from a prior failed attempt), so a stored key is re-verified against
+  // the backend before showing admin UI — otherwise a stale key renders
+  // the full admin page with every request 401ing and no way back to the
+  // login form.
+  const [status, setStatus] = useState<AuthStatus>(() => (getAdminKey() ? "checking" : "unauthed"));
+
+  useEffect(() => {
+    if (status !== "checking") {
+      return;
+    }
+    let cancelled = false;
+    adminFetch("/api/lead/metrics")
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setStatus("authed");
+        } else {
+          clearAdminKey();
+          setStatus("unauthed");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearAdminKey();
+        setStatus("unauthed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
+  if (status === "checking") {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-black">
+        <p className="text-white text-sm">Checking admin session...</p>
+      </div>
+    );
+  }
+
+  if (status === "unauthed") {
+    return <AdminLogin onAuthed={() => setStatus("authed")} />;
+  }
+
   return (
     <div className="flex bg-black w-screen h-screen overflow-hidden items-center">
       <div className="flex flex-col bg-white h-full flex-1 min-w-0">
@@ -23,6 +74,59 @@ export default function AdminLayout() {
         </div>
       </div>
       <ChatbotPlaceholder />
+    </div>
+  );
+}
+
+function AdminLogin({ onAuthed }: { onAuthed: () => void }) {
+  const [key, setKey] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setChecking(true);
+    setError(null);
+    setAdminKey(key);
+    try {
+      const res = await adminFetch("/api/lead/metrics");
+      if (!res.ok) {
+        throw new Error(res.status === 401 ? "Invalid admin key" : `Server error: ${res.status}`);
+      }
+      onAuthed();
+    } catch (err) {
+      // Clear the rejected key rather than leaving it in sessionStorage.
+      // AdminLayout seeds `authed` from getAdminKey(), so a stored-but-
+      // invalid key means a refresh renders the admin UI with every
+      // request 401ing and no way back to this form.
+      clearAdminKey();
+      setError(err instanceof Error ? err.message : "Unable to verify admin key");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="flex w-screen h-screen items-center justify-center bg-black">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 bg-white p-8 rounded shadow-md w-80">
+        <h1 className="text-xl font-semibold">Admin Login</h1>
+        <input
+          type="password"
+          placeholder="Admin API key"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          className="border rounded px-3 py-2 text-black"
+          autoFocus
+        />
+        {error && <p className="text-red-500 text-sm">{error}</p>}
+        <button
+          type="submit"
+          disabled={checking || !key}
+          className="bg-[#02AF6E] text-white rounded px-3 py-2 disabled:opacity-50"
+        >
+          {checking ? "Checking..." : "Continue"}
+        </button>
+      </form>
     </div>
   );
 }

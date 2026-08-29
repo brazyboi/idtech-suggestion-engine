@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ColorButton from "./components/ColorButton";
 import ConfirmModal from "./components/ConfirmModal";
 import DataTable, { ColumnDef } from "./components/DataTable";
+import { adminFetch } from "../../api/adminAuth";
 
 type UseCase = {
     id: number;
@@ -23,7 +24,7 @@ export default function UseCaseManager() {
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-        fetch("http://localhost:8000/api/maintenance/use-cases/")
+        adminFetch("http://localhost:8000/api/maintenance/use-cases/")
             .then((res) => {
                 if (!res.ok) throw new Error(`Server error: ${res.status}`);
                 return res.json();
@@ -40,7 +41,7 @@ export default function UseCaseManager() {
         if (selectedId === null || selectedUseCase === null) return;
         setDeleting(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/maintenance/use-cases/${selectedUseCase.name}`, {
+            const res = await adminFetch(`http://localhost:8000/api/maintenance/use-cases/${selectedUseCase.name}`, {
                 method: "DELETE",
             });
             if (!res.ok) {

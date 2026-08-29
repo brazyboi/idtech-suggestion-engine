@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ColorButton from "./components/ColorButton";
 import FormField from "./components/FormField";
+import { adminFetch } from "../../api/adminAuth";
 
 type SoftwareForm = {
     software_name: string;
@@ -30,7 +31,7 @@ export default function AddSoftware() {
             const payload = {
                 name: form.software_name.trim(),
             };
-            const res = await fetch("http://localhost:8000/api/maintenance/software/", {
+            const res = await adminFetch("http://localhost:8000/api/maintenance/software/", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

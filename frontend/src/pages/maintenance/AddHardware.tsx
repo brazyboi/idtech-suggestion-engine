@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ColorButton from "./components/ColorButton";
 import FormField from "./components/FormField";
 import MultiSelectField from "./components/MultiSelectField";
+import { adminFetch } from "../../api/adminAuth";
 
 type HardwareForm = {
     model_name: string;
@@ -37,9 +38,9 @@ export default function AddHardware() {
 
     useEffect(() => {
         Promise.all([
-            fetch("http://localhost:8000/api/maintenance/categories").then((r) => r.json()),
-            fetch("http://localhost:8000/api/maintenance/use-cases").then((r) => r.json()),
-            fetch("http://localhost:8000/api/maintenance/software").then((r) => r.json()),
+            adminFetch("http://localhost:8000/api/maintenance/categories").then((r) => r.json()),
+            adminFetch("http://localhost:8000/api/maintenance/use-cases").then((r) => r.json()),
+            adminFetch("http://localhost:8000/api/maintenance/software").then((r) => r.json()),
         ]).then(([cats, useCases, sw]) => {
             setOptions({
                 categories: cats.map((x: { name: string }) => x.name),
@@ -72,7 +73,7 @@ export default function AddHardware() {
                 use_cases: form.use_cases,
                 software: form.software,
             };
-            const res = await fetch("http://localhost:8000/api/maintenance/hardware", {
+            const res = await adminFetch("http://localhost:8000/api/maintenance/hardware", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

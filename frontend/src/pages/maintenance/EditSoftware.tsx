@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ColorButton from "./components/ColorButton";
 import FormField from "./components/FormField";
+import { adminFetch } from "../../api/adminAuth";
 
 type SoftwareForm = {
     name: string;
@@ -22,7 +23,7 @@ export default function EditSoftware() {
         setError(null);
         setSubmitting(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/maintenance/software/${name}`, {
+            const res = await adminFetch(`http://localhost:8000/api/maintenance/software/${name}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: form.name.trim() }),

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ColorButton from "./components/ColorButton";
 import FormField from "./components/FormField";
+import { adminFetch } from "../../api/adminAuth";
 
 type UseCaseForm = {
     name: string;
@@ -21,7 +22,7 @@ export default function AddUseCase() {
         setError(null);
         setSubmitting(true);
         try {
-            const res = await fetch("http://localhost:8000/api/maintenance/use-cases", {
+            const res = await adminFetch("http://localhost:8000/api/maintenance/use-cases", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: form.name.trim() }),

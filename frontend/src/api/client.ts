@@ -5,8 +5,16 @@ export interface ChatRequest {
 
 export interface SessionResponse {
   session_id: string;
+  session_token: string;
   message: string;
   stage: string;
+}
+
+export interface SessionResumeResponse {
+  session_id: string;
+  exists: boolean;
+  history: Array<{ role: string; content: string }>;
+  stage?: string;
 }
 
 export interface InstallationDoc {
@@ -86,6 +94,13 @@ export async function createSession(): Promise<SessionResponse> {
     headers: { "Content-Type": "application/json" },
   });
   return response.json() as Promise<SessionResponse>;
+}
+
+export async function resumeSession(sessionId: string, sessionToken: string): Promise<SessionResumeResponse> {
+  const response = await apiFetch(`/api/session/${encodeURIComponent(sessionId)}`, {
+    headers: { "X-Session-Token": sessionToken },
+  });
+  return response.json() as Promise<SessionResumeResponse>;
 }
 
 export async function downloadPDF(payload: PDFRequest): Promise<Blob> {

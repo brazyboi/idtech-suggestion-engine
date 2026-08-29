@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ColorButton from "./components/ColorButton";
 import ConfirmModal from "./components/ConfirmModal";
 import DataTable, { ColumnDef } from "./components/DataTable";
+import { adminFetch } from "../../api/adminAuth";
 
 type HardwareDevice = {
   id: number;
@@ -34,7 +35,7 @@ export default function HardwareManager() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/maintenance/hardware/")
+    adminFetch("http://localhost:8000/api/maintenance/hardware/")
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Server error: ${res.status}`);
@@ -65,7 +66,7 @@ export default function HardwareManager() {
 
     setDeleting(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/maintenance/hardware/${selectedDevice.model_name}`, {
+      const res = await adminFetch(`http://localhost:8000/api/maintenance/hardware/${selectedDevice.model_name}`, {
         method: "DELETE",
       });
       if (!res.ok) {

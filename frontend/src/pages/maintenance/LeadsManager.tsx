@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { adminFetch } from "../../api/adminAuth";
 
 interface Lead {
   id: number;
@@ -21,7 +22,7 @@ export default function LeadsManager() {
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const res = await fetch('/api/lead/leads');
+        const res = await adminFetch('/api/lead/leads');
         if (!res.ok) throw new Error(`Failed to fetch leads: ${res.statusText}`);
         const data: Lead[] = await res.json();
         setLeads(data);
