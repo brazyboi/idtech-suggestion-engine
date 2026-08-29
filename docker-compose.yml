@@ -19,10 +19,15 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # No host port publish: only the `backend` service (same compose
+    # network, reached via the `redis` hostname) talks to this. Nothing
+    # outside the compose network needs direct access, and Redis holds
+    # prospect PII (names, emails, chat transcripts) — no reason to expose
+    # it on the host's network interface too (see H2).
+    env_file: ./backend/.env
+    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set in backend/.env - see backend/.env.example}\" --maxmemory 256mb --maxmemory-policy allkeys-lru --save \"\" --appendonly no"]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10

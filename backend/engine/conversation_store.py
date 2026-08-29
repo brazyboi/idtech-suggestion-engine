@@ -24,6 +24,12 @@ SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", str(4 * 60 * 60)))
 # more than one worker (see get_conversation_store() below).
 REDIS_URL = os.getenv("REDIS_URL")
 
+# Kept separate from REDIS_URL rather than embedded as redis://:pw@host —
+# one fewer place a secret can end up logged (REDIS_URL itself is logged at
+# startup, see _build_store() below) and avoids URL-escaping whatever
+# characters end up in a generated password. See ARCHITECTURE.md / H2.
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+
 
 class ConversationStore(abc.ABC):
     """
@@ -50,6 +56,10 @@ class ConversationStore(abc.ABC):
     @abc.abstractmethod
     def save_session(self, session_id: str, session: ConversationSession) -> None:
         """Store the (mutated) session back into the store."""
+
+    @abc.abstractmethod
+    def ping(self) -> bool:
+        """True if the backing store is reachable — used by GET /ready (H4)."""
 
 
 class InMemoryConversationStore(ConversationStore):
@@ -104,6 +114,11 @@ class InMemoryConversationStore(ConversationStore):
         with self._lock:
             self._sessions[session_id] = session
             self._last_accessed[session_id] = time.monotonic()
+
+    def ping(self) -> bool:
+        # Nothing external to reach — always up. There's no Redis dependency
+        # in this mode, so /ready shouldn't report a fake Redis outage.
+        return True
 
 
 class RedisConversationStore(ConversationStore):
@@ -163,11 +178,24 @@ class RedisConversationStore(ConversationStore):
         except redis.RedisError:
             logger.error("Redis unreachable in save_session(%s); this turn will not persist", session_id, exc_info=True)
 
+    def ping(self) -> bool:
+        try:
+            return bool(self._redis.ping())
+        except redis.RedisError:
+            logger.error("Redis unreachable in ping()", exc_info=True)
+            return False
+
 
 def _build_store() -> ConversationStore:
     if REDIS_URL:
         logger.info("ConversationStore: using Redis at %s — sessions persist across restarts and worker processes.", REDIS_URL)
-        client = redis.from_url(REDIS_URL, decode_responses=True)
+        if not REDIS_PASSWORD:
+            logger.warning(
+                "ConversationStore: REDIS_PASSWORD is not set — connecting to Redis "
+                "without auth. Fine for a local Redis with no exposed port; a "
+                "production deploy should set REDIS_PASSWORD (see backend/.env.example)."
+            )
+        client = redis.from_url(REDIS_URL, password=REDIS_PASSWORD or None, decode_responses=True)
         return RedisConversationStore(client)
 
     logger.warning(

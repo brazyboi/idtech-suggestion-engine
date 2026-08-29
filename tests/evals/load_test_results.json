@@ -1,0 +1,250 @@
+{
+  "generated_at": "2026-08-29T02:50:55.834299+00:00",
+  "base_url": "http://localhost:18001",
+  "n_sessions": 10,
+  "turns_per_session": 2,
+  "wall_clock_s": 16.4,
+  "chat_turn_latency": {
+    "count": 20,
+    "p50_ms": 6016.5,
+    "p95_ms": 10391.5,
+    "mean_ms": 6740.8,
+    "max_ms": 10634.6
+  },
+  "status_counts": {
+    "200": 30
+  },
+  "errors": [],
+  "session_results": [
+    {
+      "session": 0,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.04853291600011289
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 5.981254999991506,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 6.655154834035784,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 1,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.03608233295381069
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 4.788892208132893,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 9.842397584114224,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 2,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.04312541615217924
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 5.868532832944766,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 6.570632209070027,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 3,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.03672870900481939
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 4.929391500074416,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 6.343396082986146,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 4,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.03466620808467269
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 4.961969624971971,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 10.391547665931284,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 5,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.04161816602572799
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 5.86988175008446,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 8.278892792062834,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 6,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.042748209089040756
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 5.7146957910154015,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 10.634572167182341,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 7,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.04350033402442932
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 4.458071582950652,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 6.016487209126353,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 8,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.03698420897126198
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 4.896322875050828,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 10.359232750022784,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "session": 9,
+      "turns": [
+        {
+          "endpoint": "POST /api/session",
+          "status": 200,
+          "elapsed_s": 0.04262749990448356
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 5.633358165854588,
+          "message": "We're a parking operator looking for an outdoor payment terminal, no host computer nearby, PIN entry and contactless required, about 5000 transactions a month."
+        },
+        {
+          "endpoint": "POST /api/chat",
+          "status": 200,
+          "elapsed_s": 6.621309584006667,
+          "message": "Does the VP6300 support WiFi and Cellular?"
+        }
+      ],
+      "ok": true
+    }
+  ]
+}
