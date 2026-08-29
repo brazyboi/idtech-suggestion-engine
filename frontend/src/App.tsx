@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import { createSession, resumeSession, sendChatMessage, type ChatResponse } from "./api/client";
+import { createSession, resumeSession, sendChatMessageStream, type ChatResponse } from "./api/client";
 import ChatWindow from "./components/ChatWindow";
 import DebugPanel from "./components/DebugPanel";
 import type { Message, Product } from "./types/messages";
@@ -39,9 +39,84 @@ const normalizeBotText = (raw: string): string => {
   return lines.join("\n\n");
 };
 
+/** Turns a finished ChatResponse into the bot Message fields onSend needs to
+ * apply — shared between the streamed "done" event and any other caller
+ * that already has a full ChatResponse in hand. */
+function applyChatResponse(
+  resp: ChatResponse,
+  collectedInfo: Record<string, unknown>,
+  nextState: string | undefined
+): { botMsg: Partial<Message>; mergedInfo: Record<string, unknown>; resolvedNextState: string | undefined } {
+  const botMsg: Partial<Message> = {
+    quickReplies: resp.quick_replies || undefined,
+  };
+
+  if (resp.type === "question" || resp.type === "clarification") {
+    botMsg.type = "multipleChoice";
+    botMsg.choices = (botMsg.quickReplies || []).map((label, idx) => ({
+      id: `choice-${Date.now()}-${idx}`,
+      label,
+    }));
+  }
+
+  const mergedInfo = { ...collectedInfo };
+  let resolvedNextState = nextState;
+
+  if (resp.new_info) {
+    const override = (resp.new_info as Record<string, unknown>)["__state_override"];
+    if (typeof override === "string") {
+      resolvedNextState = override;
+    }
+
+    for (const [key, value] of Object.entries(resp.new_info)) {
+      if (key === "__state_override") {
+        continue;
+      }
+
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        mergedInfo[key] = {
+          ...((mergedInfo[key] as Record<string, unknown> | undefined) || {}),
+          ...(value as Record<string, unknown>),
+        };
+      } else if (value !== undefined) {
+        mergedInfo[key] = value;
+      }
+    }
+  }
+
+  if (resp.next_state) {
+    resolvedNextState = resp.next_state;
+  }
+
+  botMsg.collectedInfo = mergedInfo;
+  botMsg.nextState = resolvedNextState;
+
+  if (resp.type === "recommendation" && resp.recommendation?.hardware_items?.length) {
+    const hw = resp.recommendation.hardware_items[0];
+    const product: Product = {
+      name: hw.name ?? "Product",
+      sku: (hw.technical_specs?.model_name as string) ?? "",
+      description: resp.recommendation.explanation ?? hw.role,
+      product_url: hw.product_url,
+      installation_docs: resp.recommendation.installation_docs?.map((doc) => ({
+        title: doc.title,
+        url: doc.url,
+      })),
+    };
+    botMsg.product = product;
+  }
+
+  if (resp.ui_actions?.includes("offer_booking")) {
+    botMsg.offerBooking = true;
+  }
+
+  return { botMsg, mergedInfo, resolvedNextState };
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [statusLabel, setStatusLabel] = useState<string | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [isLightTheme, setIsLightTheme] = useState(true);
   const [collectedInfo, setCollectedInfo] = useState<Record<string, unknown>>({});
@@ -131,102 +206,115 @@ function App() {
     const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
+    setStatusLabel(null);
     setDisabled(true);
 
-    try {
-      const resp: ChatResponse = await sendChatMessage({
-        message: text,
-        session_id: sessionId,
+    const botMsgId = `b-${Date.now()}`;
+    let streamedText = "";
+    let hasStreamedMessage = false;
+    // Token deltas arrive far faster than a re-render (and a Markdown
+    // re-parse) is worth doing — batch them into at most one state update
+    // per animation frame instead of one per token.
+    let flushPending = false;
+    const flushStreamedText = () => {
+      flushPending = false;
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === botMsgId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], text: streamedText };
+        return next;
       });
+    };
+    const scheduleFlush = () => {
+      if (flushPending) return;
+      flushPending = true;
+      requestAnimationFrame(flushStreamedText);
+    };
 
-      if (resp.session_id) {
-        setSessionId(resp.session_id);
-        try {
-          localStorage.setItem(SESSION_STORAGE_KEY, resp.session_id);
-        } catch {
-          // Best-effort, see initSession above.
-        }
-      }
-
-      const cleanedText = normalizeBotText(resp.text);
-      const botMsg: Message = {
-        id: `b-${Date.now()}`,
-        role: "bot",
-        text: cleanedText,
-        quickReplies: resp.quick_replies || undefined,
-      };
-
-      if (resp.type === "question" || resp.type === "clarification") {
-        botMsg.type = "multipleChoice";
-        botMsg.choices = (botMsg.quickReplies || []).map((label, idx) => ({
-          id: `choice-${Date.now()}-${idx}`,
-          label,
-        }));
-      }
-
-      const mergedInfo = { ...collectedInfoRef.current };
-      let resolvedNextState = nextState;
-
-      if (resp.new_info) {
-        const override = (resp.new_info as Record<string, unknown>)["__state_override"];
-        if (typeof override === "string") {
-          resolvedNextState = override;
+    try {
+      await sendChatMessageStream({ message: text, session_id: sessionId }, (event) => {
+        if (event.type === "progress") {
+          setStatusLabel(event.message ?? null);
+          return;
         }
 
-        for (const [key, value] of Object.entries(resp.new_info)) {
-          if (key === "__state_override") {
-            continue;
+        if (event.type === "token") {
+          streamedText += event.delta;
+          setStatusLabel(null);
+          if (!hasStreamedMessage) {
+            hasStreamedMessage = true;
+            setMessages((prev) => [
+              ...prev,
+              { id: botMsgId, role: "bot", text: streamedText, streaming: true },
+            ]);
+          } else {
+            scheduleFlush();
           }
+          return;
+        }
 
-          if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-            mergedInfo[key] = {
-              ...((mergedInfo[key] as Record<string, unknown> | undefined) || {}),
-              ...(value as Record<string, unknown>),
+        if (event.type === "error") {
+          // Whatever text streamed before the failure stays on screen —
+          // better than discarding a mostly-good answer over a late error.
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === botMsgId);
+            const errored: Message = {
+              id: `e-${Date.now()}`,
+              role: "bot",
+              text: streamedText ? `${streamedText}\n\n[${event.message}]` : `Error: ${event.message}`,
             };
-          } else if (value !== undefined) {
-            mergedInfo[key] = value;
+            if (idx === -1) return [...prev, errored];
+            const next = [...prev];
+            next[idx] = errored;
+            return next;
+          });
+          return;
+        }
+
+        // event.type === "done"
+        const resp = event.response;
+        if (resp.session_id) {
+          setSessionId(resp.session_id);
+          try {
+            localStorage.setItem(SESSION_STORAGE_KEY, resp.session_id);
+          } catch {
+            // Best-effort, see initSession above.
           }
         }
-      }
 
-      if (resp.next_state) {
-        resolvedNextState = resp.next_state;
-      }
+        const { botMsg, mergedInfo, resolvedNextState } = applyChatResponse(
+          resp,
+          collectedInfoRef.current,
+          nextState
+        );
+        setNextState(resolvedNextState);
+        setCollectedInfo(mergedInfo);
 
-      setNextState(resolvedNextState);
-      setCollectedInfo(mergedInfo);
-      botMsg.collectedInfo = mergedInfo;
-      botMsg.nextState = resolvedNextState;
-
-      if (resp.type === "recommendation" && resp.recommendation?.hardware_items?.length) {
-        const hw = resp.recommendation.hardware_items[0];
-        const product: Product = {
-          name: hw.name ?? "Product",
-          sku: (hw.technical_specs?.model_name as string) ?? "",
-          description: resp.recommendation.explanation ?? hw.role,
-          product_url: hw.product_url,
-          installation_docs: resp.recommendation.installation_docs?.map((doc) => ({
-            title: doc.title,
-            url: doc.url,
-          })),
-        };
-        botMsg.product = product;
-      }
-
-      if (resp.ui_actions?.includes("offer_booking")) {
-        botMsg.offerBooking = true;
-      }
-
-      setMessages((prev) => [...prev, botMsg]);
+        const finalText = normalizeBotText(resp.text);
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === botMsgId);
+          const finished: Message = { id: botMsgId, role: "bot", text: finalText, ...botMsg, streaming: false };
+          if (idx === -1) return [...prev, finished];
+          const next = [...prev];
+          next[idx] = finished;
+          return next;
+        });
+      });
     } catch (err) {
-      const errMsg: Message = {
-        id: `e-${Date.now()}`,
-        role: "bot",
-        text: `Error: ${String(err)}`,
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      // Request itself failed (network error, non-2xx before any bytes
+      // streamed) rather than a mid-stream "error" event.
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === botMsgId);
+        const errMsg: Message = { id: `e-${Date.now()}`, role: "bot", text: `Error: ${String(err)}` };
+        if (idx === -1 || !hasStreamedMessage) return [...prev, errMsg];
+        const next = [...prev];
+        next[idx] = errMsg;
+        return next;
+      });
     } finally {
       setIsTyping(false);
+      setStatusLabel(null);
       setDisabled(false);
     }
   }
@@ -246,7 +334,13 @@ function App() {
               >
                 {isLightTheme ? "Dark Mode" : "Light Mode"}
               </button>
-              <ChatWindow messages={messages} onSend={onSend} isTyping={isTyping} disabled={disabled} />
+              <ChatWindow
+                messages={messages}
+                onSend={onSend}
+                isTyping={isTyping}
+                statusLabel={statusLabel}
+                disabled={disabled}
+              />
               {import.meta.env.DEV && (
                 <DebugPanel
                   collectedInfo={collectedInfo}

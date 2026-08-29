@@ -57,6 +57,13 @@ export interface ChatResponse {
   debug?: Record<string, unknown>;
 }
 
+/** One SSE event from POST /api/chat/stream — see backend/routers/chat.py. */
+export type ChatStreamEvent =
+  | { type: "progress"; stage: string; tool?: string; message?: string }
+  | { type: "token"; delta: string }
+  | { type: "done"; response: ChatResponse }
+  | { type: "error"; message: string };
+
 export interface PDFRequest {
   hardware_name: string;
   software_name?: string;
@@ -86,6 +93,55 @@ export async function sendChatMessage(chatRequest: ChatRequest): Promise<ChatRes
   });
 
   return response.json() as Promise<ChatResponse>;
+}
+
+/**
+ * Streams a chat turn via SSE, invoking onEvent for each "progress"/"token"
+ * event as it arrives and once more for the terminal "done"/"error" event.
+ * Resolves once the stream ends (after "done"/"error") or rejects if the
+ * request itself failed (non-2xx, no body).
+ */
+export async function sendChatMessageStream(
+  chatRequest: ChatRequest,
+  onEvent: (event: ChatStreamEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(chatRequest),
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    const errorText = response.body ? await response.text() : "";
+    throw new Error(errorText || `Request failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sepIndex: number;
+    // SSE events are separated by a blank line; a chunk boundary can split
+    // one mid-event, so anything after the last "\n\n" stays buffered for
+    // the next read() rather than being parsed (and dropped) as-is.
+    while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+      const rawEvent = buffer.slice(0, sepIndex).trim();
+      buffer = buffer.slice(sepIndex + 2);
+      if (!rawEvent.startsWith("data: ")) continue;
+      try {
+        onEvent(JSON.parse(rawEvent.slice("data: ".length)) as ChatStreamEvent);
+      } catch {
+        // Malformed event — skip it rather than crash the whole stream.
+      }
+    }
+  }
 }
 
 export async function createSession(): Promise<SessionResponse> {

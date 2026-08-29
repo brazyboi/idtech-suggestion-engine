@@ -25,4 +25,6 @@ export interface Message {
   nextState?: string;
   /** Set when the backend's ui_actions include "offer_booking" (escalation/handoff). */
   offerBooking?: boolean;
+  /** True while this bot message's text is still arriving via SSE. */
+  streaming?: boolean;
 }

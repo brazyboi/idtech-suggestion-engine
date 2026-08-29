@@ -37,7 +37,7 @@ export default function MessageBubble({
             <div className="flex-1 min-w-0">
               <div className="w-full text-sm leading-relaxed text-primary prose prose-sm max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.text}
+                  {msg.streaming ? `${msg.text} ▌` : msg.text}
                 </ReactMarkdown>
               </div>
 

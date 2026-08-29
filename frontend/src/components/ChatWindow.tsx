@@ -9,22 +9,28 @@ interface ChatWindowProps {
   messages: Message[];
   onSend: (text: string) => void;
   isTyping?: boolean;
+  /** Transient status line from an SSE "progress" event (e.g. "Searching products..."). */
+  statusLabel?: string | null;
   disabled?: boolean;
 }
 
-function TypingIndicator() {
+function TypingIndicator({ label }: { label?: string | null }) {
   return (
     <div className="flex items-end gap-2">
       <div className="rounded-2xl rounded-bl-sm px-4 py-3 bot-bubble">
-        <div className="flex gap-1 items-center h-4">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="block h-1.5 w-1.5 rounded-full animate-bounce bot-dot"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            />
-          ))}
-        </div>
+        {label ? (
+          <span className="text-xs text-secondary">{label}</span>
+        ) : (
+          <div className="flex gap-1 items-center h-4">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="block h-1.5 w-1.5 rounded-full animate-bounce bot-dot"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -34,13 +40,17 @@ export default function ChatWindow({
   messages,
   onSend,
   isTyping = false,
+  statusLabel = null,
   disabled = false,
 }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Once the bot's first token has arrived, its MessageBubble renders the
+  // streaming cursor itself — the separate indicator would be redundant.
+  const hasStreamingMessage = messages.some((m) => m.streaming);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, statusLabel]);
 
   return (
     <div
@@ -71,7 +81,7 @@ export default function ChatWindow({
             )
           )
         )}
-        {isTyping && <TypingIndicator />}
+        {isTyping && !hasStreamingMessage && <TypingIndicator label={statusLabel} />}
         <div ref={bottomRef} />
       </div>
 
