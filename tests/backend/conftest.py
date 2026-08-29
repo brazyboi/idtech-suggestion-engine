@@ -84,7 +84,7 @@ def patch_direct_db_access(db_session, monkeypatch):
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """
-    backend.rate_limit.limiter (see D3 in ARCHITECTURE.md) is a module-level
+    backend.rate_limit.limiter is a module-level
     singleton shared by the whole process, including every test. Without
     resetting it between tests, request counts would accumulate across
     the suite and unrelated tests would start failing with 429s once the
@@ -103,9 +103,9 @@ def api_client(db_session):
     A FastAPI TestClient wired to the in-memory SQLite session via a
     get_db override, so router tests never touch the real Postgres DB.
 
-    Carries the admin API key by default (see D1 in ARCHITECTURE.md —
-    /api/lead/* and /api/maintenance/* now require it), so existing tests
-    that exercise those endpoints don't each need to pass it explicitly.
+    Carries the admin API key by default (/api/lead/* and
+    /api/maintenance/* now require it), so existing tests that exercise those
+    endpoints don't each need to pass it explicitly.
     Auth-specific tests use `unauthed_api_client` instead.
     """
     from fastapi.testclient import TestClient

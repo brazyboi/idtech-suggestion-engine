@@ -1,6 +1,6 @@
 """
-Tests for backend.engine.conversation_store — see ARCHITECTURE.md item C
-(conversation persistence across restarts / multiple worker processes).
+Tests for backend.engine.conversation_store (conversation persistence across
+restarts / multiple worker processes).
 
 The interface tests run against both InMemoryConversationStore and
 RedisConversationStore (backed by fakeredis, so no real Redis server is

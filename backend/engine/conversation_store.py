@@ -15,7 +15,7 @@ from ..engine.state_machine import ConversationSession
 logger = logging.getLogger(__name__)
 
 # Bounds session lifetime either way: in-memory evicts lazily on access,
-# Redis uses this as native TTL (see ARCHITECTURE.md item C).
+# Redis uses this as native TTL.
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", str(4 * 60 * 60)))
 
 # Redis shares sessions across workers and restarts; memory storage is for dev/test.

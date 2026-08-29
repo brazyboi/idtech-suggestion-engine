@@ -4,8 +4,8 @@ General-turn latency baseline for the agentic loop (backend/agent/loop.py).
 Measures wall-clock time spent in each phase of a turn — the gpt-4o-mini
 classify_intent/extract_slots calls and the gpt-4o agent round(s) — across a
 set of representative messages, so future streaming/parallelization work
-(see ARCHITECTURE.md Package F) has a real "before" number instead of a
-guess. Package F1 (parallelizing classify_intent + extract_slots) already
+has a real "before" number instead of a guess. Package F1 (parallelizing
+classify_intent + extract_slots) already
 landed, so this baseline reflects that — its own README/report should be
 diffed against a *second* run after any future latency change, not against
 memory of "how it used to feel".

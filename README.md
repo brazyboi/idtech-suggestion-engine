@@ -486,6 +486,5 @@ python tests/evals/load_test_concurrent_chat.py \
 │   └── services/            # Lead email and event logging services
 ├── frontend/                # React/Vite customer and admin interfaces
 ├── tests/backend/            # Deterministic pytest suite
-├── tests/evals/              # Opt-in model, latency, and load evaluations
-└── ARCHITECTURE.md           # Architecture decisions and implementation rationale
+└── tests/evals/              # Opt-in model, latency, and load evaluations
 ```

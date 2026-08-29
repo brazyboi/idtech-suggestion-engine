@@ -1,5 +1,5 @@
 """
-Auth helpers — see ARCHITECTURE.md items D1/D2.
+Auth helpers.
 
 D1: /api/lead/* and /api/maintenance/* are admin-only surfaces (lead PII,
 catalog mutation) gated behind a shared-secret API key. Minimum viable

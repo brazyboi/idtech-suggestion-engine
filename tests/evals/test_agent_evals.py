@@ -6,7 +6,7 @@ loop end to end — no mocked LLM. Unit tests check that the code paths exist;
 these check that the *model* behaves: picks the right tool, grounds its
 answer in real product data instead of generic boilerplate, and never states
 a price. That gap is not hypothetical — the VP6300 case below reproduces a
-bug found by manually testing the live app (see ARCHITECTURE.md), where a
+bug found by manually testing the live app, where a
 spec question was silently answered with unrelated canned FAQ text. A test
 like test_named_product_question_uses_real_spec would have caught it
 immediately instead of requiring someone to notice a bad reply by hand.

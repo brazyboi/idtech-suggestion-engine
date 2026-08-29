@@ -1,5 +1,5 @@
 """
-Shared slowapi Limiter instance — see ARCHITECTURE.md D3.
+Shared slowapi Limiter instance.
 
 Lives in its own module so both main.py (which registers it on the app)
 and routers/chat.py (which decorates endpoints with it) can import it
