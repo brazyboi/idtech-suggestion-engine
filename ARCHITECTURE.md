@@ -302,3 +302,53 @@ the React app was a plain route with no gate at all, and `GET
   carries the admin key by default so existing lead/maintenance tests didn't
   need per-test changes; `unauthed_api_client` is the auth-gate-specific
   variant. 321/321 passing (308 baseline + 13 new).
+## "Shop by Solution" chip -> category/use_case mapping
+## "Shop by Solution" chip → category/use_case mapping
+
+The site's "Shop by Solution" entry points are meant to deep-link into the
+Product Finder chat with prefilled text, which the agent then resolves into
+a `search_products` call. Four of the five chips map directly onto existing
+DB categories:
+
+| Chip          | DB category                     |
+|---------------|----------------------------------|
+| Countertop    | `Countertop Solution`            |
+| Unattended    | `Unattended Payment Solutions`   |
+| Mobile        | `Mobile Payment Devices`         |
+| OEM           | `OEM Payment Products`           |
+
+**Point of Sale** has no matching DB category. Prior to this change,
+`backend/knowledge/vertical_map.json`'s `retail` entry listed `pos`,
+`point of sale`, and `countertop` as *use_case* aliases (resolving to the
+`retail` → `Loyalty Program Contactless Readers` use case). That meant a
+"Point of Sale" chip would have filtered by industry/vertical instead of by
+product category — inconsistent with the other four chips, which are all
+category filters, and confusing since "Point of Sale" is a product/category
+concept, not an industry.
+
+**Decision: alias "Point of Sale" to the `Countertop Solution` category**
+(option a), not a new DB category and not a use_case alias.
+
+Reasoning:
+- The four sibling chips are all category filters. Treating "Point of Sale"
+  as a use_case would make it behave differently from every other chip for
+  no product reason a customer would understand.
+- "Point of Sale" and "Countertop" describe the same class of hardware —
+  attended, counter-mounted terminals — so a real, separate DB category
+  would just duplicate `Countertop Solution` with no distinguishing
+  products (this package's scope explicitly excludes adding new
+  categories/products to the catalog).
+- Aliasing keeps the fix data-only: `vertical_map.json`'s `retail` entry no
+  longer claims `pos`/`point of sale`/`countertop` as industry aliases (see
+  the `retail` mapping), and `_build_valid_values_section()` in
+  `backend/agent/prompts.py` now tells the model the real DB category list
+  each turn, so the model is expected to resolve "Point of Sale" text to
+  `category="Countertop Solution"` the same way it resolves "Countertop" —
+  i.e. via the tool's `category` parameter, not `use_case`.
+
+There is currently no chip UI in `frontend/` that deep-links into the finder
+(no "Shop by Solution" component exists yet), so there is no literal
+click-handler to update. This section documents the intended mapping so
+that whoever builds that UI wires "Point of Sale" to
+`search_products(category="Countertop Solution")` rather than to a
+use_case.

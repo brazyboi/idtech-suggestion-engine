@@ -13,7 +13,7 @@
     },
     "retail": {
       "canonical": "Loyalty Program Contactless Readers",
-      "aliases": ["store", "shop", "pos", "point of sale", "checkout", "counter", "boutique"],
+      "aliases": ["store", "shop", "checkout", "counter", "boutique"],
       "typical_needs": ["contactless", "compact", "countertop", "USB"]
     },
     "vending": {

@@ -54,7 +54,7 @@ class ProductMatcher:
         """
         constraints = collected.to_flat_constraints()
         with session_scope() as db:
-            rows = product_filtering(db, constraints)
+            rows = product_filtering(db, constraints)["products"]
 
         debug_match = (
             ProductMatcher._build_debug_match_payload(constraints, rows)

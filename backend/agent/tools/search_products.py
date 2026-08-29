@@ -28,7 +28,12 @@ def search_products(
     Returns a dict with:
         - products: list of matching hardware items
         - count: number of results
-        - constraints_used: the constraints that were applied
+        - constraints_applied: the constraints that were actually applied to
+          produce these results
+        - constraints_relaxed: constraints that were REQUESTED but dropped
+          because no results matched them (the relaxation cascade in
+          product_filtering). Non-empty means these results are a fallback,
+          not an exact match — disclose this to the customer.
     """
     constraints: Dict[str, Any] = {}
     if use_case:
@@ -49,7 +54,9 @@ def search_products(
         constraints["search_query"] = query
 
     with session_scope() as db:
-        rows = product_filtering(db, constraints)
+        result = product_filtering(db, constraints)
+
+    rows = result["products"]
 
     # Strip down to LLM-safe fields — no pricing, no internal IDs
     products = []
@@ -73,5 +80,6 @@ def search_products(
     return {
         "products": products,
         "count": len(products),
-        "constraints_used": {k: v for k, v in constraints.items() if v is not None},
+        "constraints_applied": result["constraints_applied"],
+        "constraints_relaxed": result["constraints_relaxed"],
     }
