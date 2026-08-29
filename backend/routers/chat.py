@@ -168,9 +168,19 @@ async def chat_endpoint(
         was_recommendation_shown = session.collected_info.meta.recommendation_shown
         was_lead_submitted = session.lead_submitted
 
-        response = process_message(
-            message=chat_request.message,
-            session=session,
+        # run_in_threadpool: process_message() is synchronous and blocks on
+        # real network I/O (OpenAI calls, DB queries) for a second or more
+        # per turn. Calling it directly here (an `async def` endpoint) would
+        # run it straight on the single asyncio event-loop thread, blocking
+        # every other concurrent request for the full duration of this
+        # turn — a load test (tests/evals/load_test_concurrent_chat.py,
+        # H3) showed exactly this: 10 concurrent sessions serialized into
+        # tens of seconds of latency per turn. /api/chat/stream already
+        # does this for the same reason (see _next_or_done below).
+        response = await run_in_threadpool(
+            process_message,
+            chat_request.message,
+            session,
         )
 
         # Serialize the response, adding the session_id.

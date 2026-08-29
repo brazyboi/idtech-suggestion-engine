@@ -3,6 +3,7 @@ import os
 import sys
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -24,6 +25,14 @@ load_dotenv()
 # confusing OpenAI auth error deep inside a request instead of an obvious
 # startup failure. Set SKIP_STARTUP_CHECKS=1 to bypass (e.g. for tooling
 # that imports this module without needing the chat feature to work).
+
+# Placeholder value shipped in backend/.env.example for both ADMIN_API_KEY
+# and SESSION_SECRET_KEY. The non-empty checks below only catch an unset
+# var — copying .env.example to .env without editing it passes those
+# checks fine and boots "successfully" with a publicly-known secret gating
+# lead PII and session transcripts. Reject it explicitly (H5).
+_PLACEHOLDER_SECRET = "change-me-to-a-random-secret"
+
 if not os.getenv("SKIP_STARTUP_CHECKS"):
     if not (os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY")):
         raise RuntimeError(
@@ -41,16 +50,34 @@ if not os.getenv("SKIP_STARTUP_CHECKS"):
             "exposed without it. Set it in the environment or a .env file "
             "before starting the server."
         )
+    if os.getenv("ADMIN_API_KEY") == _PLACEHOLDER_SECRET:
+        raise RuntimeError(
+            "ADMIN_API_KEY is still set to the placeholder value from "
+            "backend/.env.example ('change-me-to-a-random-secret'). Generate "
+            "a real secret (e.g. `openssl rand -hex 32`) before starting the "
+            "server."
+        )
     if not os.getenv("SESSION_SECRET_KEY"):
         raise RuntimeError(
             "SESSION_SECRET_KEY is not set. Session transcripts cannot be "
             "safely served without it. Set it in the environment or a .env "
             "file before starting the server."
         )
+    if os.getenv("SESSION_SECRET_KEY") == _PLACEHOLDER_SECRET:
+        raise RuntimeError(
+            "SESSION_SECRET_KEY is still set to the placeholder value from "
+            "backend/.env.example ('change-me-to-a-random-secret'). Generate "
+            "a real secret (e.g. `openssl rand -hex 32`) before starting the "
+            "server."
+        )
 
 logger = logging.getLogger(__name__)
 
+from sqlalchemy import text
+
 from backend.auth import require_admin_key
+from backend.db.session import session_scope
+from backend.engine.conversation_store import get_conversation_store
 from backend.rate_limit import limiter
 from backend.routers import chat, pdf
 from backend.routers import lead as lead_router
@@ -105,6 +132,38 @@ app.include_router(docs.router, prefix="/api/maintenance/docs", tags=["Maintenan
 @app.get("/")
 async def root():
     return {"message": "ID TECH Suggestion Engine API is running"}
+
+
+@app.get("/ready")
+async def readiness():
+    """
+    Readiness probe (H4) — actively checks the DB and conversation-store
+    (Redis, when configured) dependencies so an orchestrator (k8s, ECS,
+    ...) can stop routing traffic to an instance that can't actually serve
+    a request, rather than only checking the process is alive.
+
+    Deliberately unauthenticated (orchestrators can't present credentials)
+    and leaks nothing beyond a boolean per check — no connection strings,
+    hostnames, or credentials in the response.
+    """
+    db_ok = False
+    try:
+        with session_scope() as db:
+            db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        logger.exception("Readiness check: database unreachable")
+
+    redis_ok = False
+    try:
+        redis_ok = get_conversation_store().ping()
+    except Exception:
+        logger.exception("Readiness check: conversation store unreachable")
+
+    checks = {"db": db_ok, "redis": redis_ok}
+    status = "ok" if all(checks.values()) else "unhealthy"
+    body = {"status": status, "checks": checks}
+    return JSONResponse(status_code=200 if status == "ok" else 503, content=body)
 
 if __name__ == "__main__":
     import uvicorn

@@ -302,3 +302,163 @@ the React app was a plain route with no gate at all, and `GET
   carries the admin key by default so existing lead/maintenance tests didn't
   need per-test changes; `unauthed_api_client` is the auth-gate-specific
   variant. 321/321 passing (308 baseline + 13 new).
+
+## Deployment readiness (Package H, 2026-08-28)
+
+Closing the gap between "passes its own tests" and "safe to put behind a
+public URL." Each item below was live-verified against a real Docker stack
+(`docker compose up -d db redis backend`), not just unit-tested, except
+where noted.
+
+**H1 — Rate limiting behind a proxy.** `get_remote_address` (slowapi's
+default `key_func`) reads `request.client.host` — behind any reverse proxy
+or load balancer that's the *proxy's* IP, so every real visitor shared one
+bucket and `/api/chat`'s rate limit was effectively void for any deploy
+fronted by a proxy. `backend/rate_limit.py` now has `get_client_ip()`: the
+raw connecting peer's IP is used UNLESS that peer is in a configured
+`TRUSTED_PROXY_IPS` set (comma-separated IPs/CIDRs, env var, empty by
+default), in which case `X-Forwarded-For`'s left-most entry (or
+`X-Real-IP`) is trusted instead. Unconfigured = identical behavior to
+before (safe by default, no header ever trusted); this is a strict
+widening, not a behavior change, until an operator opts in. Live-verified:
+with `TRUSTED_PROXY_IPS=0.0.0.0/0` set, two different `X-Forwarded-For`
+values got independent rate-limit buckets (10 requests each, 429 only
+after the 10th); with it unset, requests from the same peer shared one
+bucket exactly as before regardless of what `X-Forwarded-For` claimed.
+
+**H2 — Redis production config.** `docker-compose.yml`'s `redis` service
+previously ran with no auth, a published host port, default (RDB
+snapshot) persistence, and no memory bound — for a store holding prospect
+PII (names, emails, full transcripts). Now:
+- **Auth**: `--requirepass "${REDIS_PASSWORD:?...}"` — fails to start
+  without a real `REDIS_PASSWORD` (env var, see `backend/.env.example`),
+  not a hardcoded default. The backend passes it to `redis.from_url(...,
+  password=REDIS_PASSWORD)` (`backend/engine/conversation_store.py`)
+  rather than embedding it in `REDIS_URL` itself — one fewer place a
+  secret ends up in a log line (`REDIS_URL` is logged at startup) and
+  avoids URL-escaping whatever characters land in a generated password.
+- **Persistence decision: accept loss on restart, no AOF.** Considered
+  enabling AOF for durability across restarts, but decided against it:
+  (1) session data already has a 4-hour TTL and the store's own documented
+  failure mode for a *live* Redis outage is "degrade to serving a fresh,
+  unpersisted session" (see "Persistent conversation store" above) — a
+  restart losing the same data is a consistent, already-accepted
+  tradeoff, not a new one; (2) this data is prospect PII (names, emails,
+  transcripts) — an AOF file is that same PII, in full, sitting on disk
+  indefinitely (or until the volume is cleaned up), which is a durability
+  win bought with a real exposure surface for data nobody needs after a
+  few hours anyway; (3) no migration/backfill of anything valuable is at
+  risk — the worst case of a Redis restart is prospects who were
+  mid-conversation have to restart it, not lost leads (leads are written
+  to Postgres via `submit_lead`, not Redis). `--save ""
+  --appendonly no` makes this explicit rather than relying on the image's
+  default RDB save points.
+- **Eviction policy**: `--maxmemory 256mb --maxmemory-policy allkeys-lru`
+  — every key in this store is ephemeral session data, so evicting the
+  least-recently-used key under memory pressure is safe (worse case: that
+  session's user has to repeat themselves), unlike `noeviction`'s default
+  of refusing writes once full.
+- **No host port publish**: `ports: ["6379:6379"]` removed. Nothing
+  outside the Docker Compose network needs to reach Redis directly — only
+  the `backend` service does, via the `redis` hostname on the compose
+  network — so publishing it to the host was pure attack surface for a
+  PII-holding store. (Left DB's `5432:5432` alone — pre-existing, out of
+  scope for this pass, and worth revisiting for the same reason.)
+- **Live-verified**: unauthenticated `redis-cli ping` against the
+  container returned `NOAUTH Authentication required`; authenticated
+  `ping` (via the container's own `$REDIS_PASSWORD`) returned `PONG`;
+  `CONFIG GET` confirmed `maxmemory=268435456`, `maxmemory-policy
+  allkeys-lru`, `appendonly no`, `save` empty; `docker port` showed no
+  host binding. Created a session, sent a real chat turn through the live
+  OpenAI-backed agent, `docker restart` on just the backend container,
+  then re-fetched the same session with its token — transcript survived
+  intact (Redis itself wasn't restarted, consistent with the persistence
+  decision above).
+
+**H3 — Load testing + an honest latency baseline.**
+- **The old baseline understated real latency.** `latency_baseline_report.json`
+  (p50=1.77s) averages only 0.9 `gpt-4o` rounds/turn because most of its
+  `MESSAGES` are short, isolated, fresh-session qualification answers —
+  the router mostly short-circuits or answers in one round; it barely
+  exercises the multi-round tool-calling loop a real product search or
+  spec lookup drives. Added `test_latency_baseline_tool_heavy.py`
+  (`latency_baseline_tool_heavy_report.json`), targeting messages that
+  actually get 2 tool-calling rounds (named-product spec questions,
+  richer single-message qualification, and one full multi-turn
+  conversation run in one session so later turns have accumulated
+  context). Result: **p50=2.19s, p95=5.49s, mean=3.33s** (mean 1.57
+  rounds/turn, n=14, real API) — the old baseline's own highest-latency
+  rows (VP6300/VP7200/VP3300 spec questions, 3.1-5.4s) were already
+  hinting at this; the new run confirms it's the common case for a
+  tool-heavy turn, not an outlier, and roughly matches an independently
+  observed 7.3s live tool-calling turn.
+- **Found and fixed a real concurrency bug while load testing.**
+  `POST /api/chat` (`routers/chat.py`) is an `async def` endpoint that
+  called the synchronous, network-blocking `process_message()` directly —
+  unlike `POST /api/chat/stream`, which already wraps its (also
+  synchronous) generator in `run_in_threadpool` for exactly this reason.
+  An `async def` route is never offloaded to a worker thread by
+  Starlette, so every OpenAI/DB call inside `process_message()` blocked
+  the single asyncio event-loop thread — serializing *all* concurrent
+  `/api/chat` requests, regardless of session. A 10-concurrent-session
+  load test against a live stack (`docker compose up`, real OpenAI calls)
+  measured **p50=28.4s, p95=42.8s, and 14/30 requests timing out**
+  before the fix; wrapping the same call in `run_in_threadpool`
+  (`routers/chat.py`) brought the same test to **p50=6.0s, p95=10.4s,
+  30/30 succeeding** — an order of magnitude, and the difference between
+  "broken under any real concurrency" and "works." Full before/after
+  detail lives in the load-test results file below.
+- **Concurrent load test added**: `tests/evals/load_test_concurrent_chat.py`
+  — a standalone `httpx`+`asyncio` script (no new dependency; `httpx` was
+  already present) that runs N concurrent conversations against a live
+  server and reports p50/p95/error counts. Checked-in results
+  (`tests/evals/load_test_results.json`) are the post-fix run: 10
+  sessions x 2 turns, p50=6.0s / p95=10.4s / mean=6.7s, 30/30 succeeded,
+  against an isolated stack (own Postgres/Redis containers, not the
+  dev stack) with a real `OPENAI_API_KEY`. A follow-up 20-session burst
+  (all from one IP, as a load-test script naturally is) got 10/30
+  requests correctly 429'd by the per-IP `/api/chat` limit (20/minute,
+  see D3) rather than 500ing or exhausting the DB connection pool — the
+  rate limiter engaging under real concurrent burst traffic is the
+  intended behavior, not a bug, and no pool-exhaustion errors surfaced up
+  to that concurrency.
+- **OpenAI 429 behavior under concurrency**: already handled per-request
+  (`agent/loop.py` catches `OpenAIError`, which `RateLimitError`
+  subclasses, around every `chat.completions.create(...)` call and
+  degrades to a safe fallback response — see the "No retry/timeout around
+  the OpenAI call" finding in the table above), but nothing had verified
+  this holds under *concurrent* 429s specifically.
+  `tests/evals/test_load_concurrent.py` (mocked OpenAI, no real API cost)
+  runs 20 concurrent `process_message()` calls via real OS threads with
+  every other call raising a simulated `RateLimitError` — all 20 return a
+  valid response, none raise. A second test in the same file runs 20
+  fully-successful concurrent calls as a baseline thread-safety check.
+- **Redis connection-pool behavior under load**: not separately stressed
+  beyond the load test above — at 10-20 concurrent sessions no pool
+  errors surfaced (each `RedisConversationStore` call goes through
+  `redis-py`'s default connection pool, sized generously relative to this
+  concurrency). Worth a dedicated stress test before a deploy expecting
+  triple-digit concurrent sessions; out of scope for this pass.
+
+**H4 — Readiness endpoint.** Added `GET /ready` (`backend/main.py`):
+executes `SELECT 1` against Postgres (via the existing `session_scope()`)
+and pings the active `ConversationStore` (new `ping()` method on both
+implementations — always `True` for the in-memory store, since there's
+nothing external to fail; a real Redis `PING` for the Redis-backed one).
+Returns `{"status": "ok"|"unhealthy", "checks": {"db": bool, "redis":
+bool}}` — `200` when both pass, `503` otherwise; never a connection
+string, hostname, or credential in the body. Deliberately unauthenticated
+(an orchestrator's health checker can't present `X-Admin-Api-Key`).
+Live-verified: `ok`/`200` against the healthy stack; stopping the `redis`
+container flipped it to `{"status": "unhealthy", "checks": {"db": true,
+"redis": false}}` / `503` within one request, and it recovered to `ok`
+immediately after restarting Redis.
+
+**H5 — Secret hygiene.** The existing startup check only verified
+`ADMIN_API_KEY` / `SESSION_SECRET_KEY` were non-empty — copying
+`backend/.env.example` to `.env` without editing those two lines passed
+that check and booted with the literal, publicly-known placeholder value
+(`change-me-to-a-random-secret`) gating lead PII and session transcripts.
+`backend/main.py` now also rejects that exact placeholder value for both
+vars with a dedicated error message, in addition to the existing
+non-empty check.
