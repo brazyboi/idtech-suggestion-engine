@@ -1,5 +1,5 @@
 """
-Per-turn latency baseline for the agentic loop (backend/agent/loop.py).
+General-turn latency baseline for the agentic loop (backend/agent/loop.py).
 
 Measures wall-clock time spent in each phase of a turn — the gpt-4o-mini
 classify_intent/extract_slots calls and the gpt-4o agent round(s) — across a
@@ -13,6 +13,12 @@ memory of "how it used to feel".
 Run with:  RUN_EVALS=1 pytest tests/evals/test_latency_baseline.py -s
 Requires a real OPENAI_API_KEY (real cost per run — small, but not free).
 Skipped automatically otherwise (see conftest.py).
+
+This intentionally includes short-circuit and qualification turns, so it is
+the routing/general-turn baseline, not the recommendation-latency baseline.
+For product-finder latency, use test_latency_baseline_tool_heavy.py and its
+latency_baseline_tool_heavy_report.json; that suite exercises actual tool
+calls and a multi-turn recommendation flow.
 
 Writes a JSON report to tests/evals/latency_baseline_report.json so a later
 run can be diffed against this one.

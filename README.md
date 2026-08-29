@@ -159,7 +159,7 @@ npm test
 ```bash
 RUN_EVALS=1 pytest tests/evals
 ```
-See `tests/evals/` for the golden-case model-behavior suite, the per-turn latency baselines (`test_latency_baseline.py` and `test_latency_baseline_tool_heavy.py`), and the mocked-OpenAI concurrency test (`test_load_concurrent.py`).
+See `tests/evals/` for the golden-case model-behavior suite, the general-turn/routing latency baseline (`test_latency_baseline.py`), the recommendation-focused tool-heavy latency baseline (`test_latency_baseline_tool_heavy.py`), and the mocked-OpenAI concurrency test (`test_load_concurrent.py`). Use the tool-heavy report when judging Product Finder latency; the general-turn report deliberately includes short-circuit turns and is not comparable to a real recommendation turn.
 
 **Concurrent load test against a live stack:**
 ```bash

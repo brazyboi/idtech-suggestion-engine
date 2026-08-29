@@ -11,6 +11,7 @@ import pytest
 
 from backend.db.repositories.admin_repository import AdminRepository
 from backend.db.repositories.product_query import ProductRepository
+from backend.agent.tools.search_products import search_products
 
 
 @pytest.fixture
@@ -107,3 +108,31 @@ class TestFindProductsFiltering:
     def test_combining_contradictory_filters_returns_empty(self, query, seeded):
         results = query.find_products(category="Retail", use_case="Vending")
         assert results == []
+
+
+class TestConstraintRelaxationReporting:
+    """The fallback cascade must report exactly which constraints it dropped."""
+
+    def test_unknown_category_is_reported_as_relaxed(self, patch_direct_db_access, seeded):
+        result = search_products(category="card reader")
+
+        assert result["products"]
+        assert result["constraints_applied"] == {}
+        assert result["constraints_relaxed"] == {"category": "card reader"}
+        assert "constraints_used" not in result
+
+    def test_exact_match_has_no_false_relaxation(self, patch_direct_db_access, seeded):
+        result = search_products(category="Parking")
+
+        assert [product["model_name"] for product in result["products"]] == ["VP5300"]
+        assert result["constraints_applied"] == {"category": "Parking"}
+        assert result["constraints_relaxed"] == {}
+
+    def test_use_case_relaxation_preserves_other_applied_constraints(
+        self, patch_direct_db_access, seeded
+    ):
+        result = search_products(use_case="Vending", interface="USB")
+
+        assert [product["model_name"] for product in result["products"]] == ["VP3300"]
+        assert result["constraints_applied"] == {"interface": "USB"}
+        assert result["constraints_relaxed"] == {"use_case": "Vending"}

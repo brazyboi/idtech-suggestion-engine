@@ -1,4 +1,5 @@
 {
+  "scope": "general-turn/routing baseline; use latency_baseline_tool_heavy_report.json for Product Finder latency",
   "n_messages": 20,
   "turn_total": {
     "label": "turn_total (full process_message call)",
