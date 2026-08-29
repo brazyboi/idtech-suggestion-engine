@@ -61,3 +61,32 @@ class TestGetProductDetails:
         assert "error" in result
         assert "model_name" not in result  # did NOT return a product
         assert set(result["did_you_mean"]) == {"VP3300", "VP3350"}
+
+    def test_two_char_typo_suggests_instead_of_dead_ending(self, db_session, patch_direct_db_access):
+        """'VP33OO' (letters instead of zeros) is too different from
+        'VP3300' to auto-resolve (2 of 6 chars wrong — same 'don't guess'
+        rule as test_partial_match_does_not_silently_return_wrong_product),
+        but it must still surface it as a suggestion instead of the old
+        behavior: ILIKE finds zero rows for a non-substring typo, so it used
+        to dead-end with no candidates at all."""
+        _seed(db_session)
+        result = get_product_details("VP33OO")
+        assert "error" in result
+        assert "model_name" not in result
+        assert "VP3300" in result["did_you_mean"]
+
+    def test_extra_whitespace_still_resolves(self, db_session, patch_direct_db_access):
+        """A stray space must not defeat matching — this used to fail the
+        exact-equality check even though ILIKE found the row."""
+        _seed(db_session)
+        result = get_product_details("VP 3300")
+        assert result.get("model_name") == "VP3300"
+        assert "error" not in result
+
+    def test_wildly_wrong_name_gets_no_suggestions(self, db_session, patch_direct_db_access):
+        """A name sharing no real similarity with anything in the catalog
+        should not surface unrelated products as 'did you mean' noise."""
+        _seed(db_session)
+        result = get_product_details("Totally Unrelated Gadget 9000")
+        assert "error" in result
+        assert "did_you_mean" not in result

@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -41,7 +42,7 @@ from ..services.logger import ReasoningTrace
 from .classifier import classify_intent
 from .prompts import build_system_prompt
 from .slot_extractor import extract_slots
-from .tools.registry import get_tools_for_intent
+from .tools.registry import get_tools_for_intent, GET_PRODUCT_DETAILS_TOOL
 from .tools._product_url import get_product_url
 from .tools.search_products import search_products as _search_products
 from .tools.get_product_details import get_product_details as _get_product_details
@@ -260,6 +261,19 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
 
     # ── 4. Build the agent loop ──
     tools = get_tools_for_intent(intent)
+    # get_tools_for_intent("faq") doesn't include get_product_details — by
+    # design, FAQ turns don't need it. But a message naming a specific
+    # product (checked deterministically, same pattern as the FAQ-shortcut
+    # bypass above) is a spec question regardless of classified intent, and
+    # the model can't call a tool it was never offered — this isn't a
+    # prompt-wording problem, the tool was structurally unavailable. Found
+    # live: intent classified "faq" for "does the VP6300 support WiFi and
+    # Cellular?", and the model answered from its own guess instead of
+    # get_product_details, since that tool wasn't in its list at all.
+    if _PRODUCT_NAME_PATTERN.search(message.lower()) and not any(
+        t["function"]["name"] == "get_product_details" for t in tools
+    ):
+        tools = tools + [GET_PRODUCT_DETAILS_TOOL]
     tool_names_used: List[str] = []
     products_this_turn: List[Dict[str, Any]] = []
     lead_submitted_this_turn = False
@@ -281,7 +295,7 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
     # of hanging the request indefinitely. The SDK itself retries transient
     # errors (connection errors, 429, 5xx) with backoff up to max_retries.
     client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY") or "test-key",
+        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY"),
         timeout=20.0,
         max_retries=2,
     )
@@ -311,7 +325,7 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
         try:
             response = client.chat.completions.create(
                 model="gpt-4o",
-                tools=tools if tool_names_used else tools,  # Keep tools available
+                tools=tools,
                 tool_choice="auto" if not lead_submitted_this_turn else "none",
                 messages=messages,
             )
@@ -427,23 +441,83 @@ _FAQ_KEYWORDS: Dict[str, List[str]] = {
     "compatibility": ["compatible", "work with", "integrate", "integration", "platform", "software"],
     "security": ["security", "secure", "PCI", "encryption", "compliance", "certified", "tamper"],
     "support": ["support", "help", "technical support", "contact", "phone", "call", "reach"],
+    "payment_integration": ["pae", "payment application engine", "middleware", "emv certification", "level 3", "l3", "processor integration", "tokenization"],
+    "device_management": ["rdm", "remote device management", "firmware", "fleet", "remote update", "device monitoring", "diagnostics"],
+    "key_injection": ["rki", "key injection", "remote key", "cryptographic key", "key provisioning"],
+    "merchant_services": ["merchant services", "merchant account", "processing", "p2pe", "interchange", "acquirer", "gateway", "echeck", "ach", "virtual terminal", "invoicing", "payment link", "boarding", "onboarding"],
 }
+
+# Model-name shapes seen across the catalog (VP3300, AP3880P, Kiosk IV,
+# SmartPIN L80, SREDKey2, MiniMag II, ...). A message naming a specific
+# product is a spec question, not a FAQ — it needs the full agent loop and
+# get_product_details, not the keyword-matched canned-answer shortcut below.
+# `\s?` between prefix and digits tolerates a stray space ("vp 6300") —
+# without it, a message differing from the real bypass trigger by exactly
+# one space silently fell back through to the FAQ shortcut (found live:
+# "does the vp 6300 support wifi?" got generic compatibility boilerplate
+# instead of ever reaching get_product_details).
+_PRODUCT_NAME_PATTERN = re.compile(
+    r"\b(vp\s?\d{3,4}\w*|ap\s?\d{3,4}\w*|kiosk\s*(iv|v|iii)\b|smartpin(\s*l\d+)?|sredkey\s*\d*|minimag(\s*(ii|duo))?|minismart(\s*ii)?)\b",
+    re.IGNORECASE,
+)
+
+# Spec/capability terms that mean "support" is being used as a verb ("does
+# it support NFC?") rather than a request for customer help.
+_CONNECTIVITY_TERMS = (
+    "wifi", "wi-fi", "cellular", "bluetooth", "ethernet", "usb", "nfc",
+    "emv", "contactless", "magstripe", "rs232", "serial", "pin",
+)
 
 
 def _has_only_faq_intent(message: str) -> bool:
     """Check if the message is purely a FAQ question (not mixed with qualification)."""
     lower = message.lower().strip()
+    # A message naming a specific product is a spec question, not a FAQ —
+    # route it to the full agent loop so get_product_details can answer with
+    # real specs instead of a generic canned answer (see loop.py history:
+    # "does the VP6300 support WiFi and Cellular?" was misrouted here before
+    # this check existed).
+    if _PRODUCT_NAME_PATTERN.search(lower):
+        return False
     # If it's very short and purely a question, treat as pure FAQ
     if len(lower) < 80 and lower.count("?") <= 2:
         return True
     return False
 
 
+def _kw_in(lower: str, kw: str) -> bool:
+    """Word-boundary keyword match, not plain substring: merchant_services'
+    "ach" keyword would otherwise false-positive on "reach", "each",
+    "coach", "teach", etc. — a plain `kw in lower` check can't tell
+    "ACH?" from "how do I reach support?".
+
+    The optional `(s|es)` suffix keeps plurals working. A bare `\\b<kw>\\b`
+    regressed pre-existing singular keywords that used to match by
+    substring: "rate" stopped matching "what are your rates?", "return"
+    stopped matching "do you have returns", and "integration" stopped
+    matching "what integrations do you have" — all of which silently fell
+    through to the "general" topic. A broader `\\w*` suffix would fix those
+    but reintroduce the original bug ("ach" would match "achieve"), so the
+    suffix is deliberately limited to plural forms.
+    """
+    return re.search(r"\b" + re.escape(kw.lower()) + r"(s|es)?\b", lower) is not None
+
+
 def _detect_faq_topic(message: str) -> str:
     """Detect which FAQ topic the user is asking about."""
     lower = message.lower()
+    # "does/is/can it support <spec>" is a compatibility question, not a
+    # request for customer support — check this before the generic keyword
+    # loop, where bare "support" would otherwise win.
+    if "support" in lower and any(_kw_in(lower, term) for term in _CONNECTIVITY_TERMS):
+        return "compatibility"
+    # Same problem, merchant-services shaped: "do you support ACH?" would
+    # otherwise hit the generic "support" keyword (checked earlier in
+    # _FAQ_KEYWORDS) before ever reaching merchant_services' own keywords.
+    if "support" in lower and any(_kw_in(lower, term) for term in _FAQ_KEYWORDS["merchant_services"]):
+        return "merchant_services"
     for topic, keywords in _FAQ_KEYWORDS.items():
         for kw in keywords:
-            if kw in lower:
+            if _kw_in(lower, kw):
                 return topic
     return "general"

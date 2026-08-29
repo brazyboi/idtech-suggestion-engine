@@ -16,6 +16,8 @@ from backend.agent.tools.registry import (
     SUBMIT_LEAD_TOOL,
     ESCALATE_TO_SALES_TOOL,
     ANSWER_FAQ_TOOL,
+    GET_PRODUCT_DETAILS_TOOL,
+    GET_SOLUTION_CONTENT_TOOL,
 )
 
 
@@ -44,9 +46,12 @@ class TestGetToolsForIntent:
         for intent in ("product_search", "faq", "qualification", "lead_capture", "escalate", "greeting", "chitchat"):
             assert CAPTURE_LEAD_INFO_TOOL in get_tools_for_intent(intent)
 
-    def test_faq_intent_only_offers_answer_faq(self):
+    def test_faq_intent_offers_answer_faq_and_escalation(self):
+        """escalate_to_sales must be offered on faq — the approved pricing
+        answer itself offers to connect the customer to a specialist, so the
+        model needs a tool to act on "yes, connect me"."""
         names = _names(get_tools_for_intent("faq"))
-        assert names == {"capture_lead_info", "answer_faq"}
+        assert names == {"capture_lead_info", "answer_faq", "escalate_to_sales"}
 
     def test_product_search_intent_offers_product_tools(self):
         names = _names(get_tools_for_intent("product_search"))
@@ -61,9 +66,29 @@ class TestGetToolsForIntent:
         assert "escalate_to_sales" in names
         assert "submit_lead" in names
 
-    def test_lead_capture_intent_offers_only_submit_lead(self):
+    def test_qualification_intent_offers_answer_faq(self):
+        """The classifier defaults short/ambiguous messages to "qualification",
+        so a mid-qualification pricing question must still be able to reach
+        the pricing guardrail via answer_faq instead of the model improvising
+        a price."""
+        names = _names(get_tools_for_intent("qualification"))
+        assert "answer_faq" in names
+        assert "get_product_details" in names
+        assert "submit_lead" not in names
+
+    def test_lead_capture_intent_offers_submit_and_support_tools(self):
         names = _names(get_tools_for_intent("lead_capture"))
-        assert names == {"capture_lead_info", "submit_lead"}
+        assert names == {
+            "capture_lead_info",
+            "submit_lead",
+            "escalate_to_sales",
+            "get_product_details",
+            "answer_faq",
+        }
+
+    def test_greeting_intent_offers_solution_content(self):
+        names = _names(get_tools_for_intent("greeting"))
+        assert "get_solution_content" in names
 
     def test_unknown_intent_falls_back_to_all_tools(self):
         """An intent the classifier could theoretically emit but that isn't

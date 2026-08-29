@@ -7,7 +7,7 @@ and returns matching hardware with key specs. No pricing data is exposed.
 
 from typing import Any, Dict, List
 
-from ...db.session import SessionLocal
+from ...db.session import session_scope
 from ...engine.rulesEngine.product_filtering import product_filtering
 from ._product_url import get_product_url
 
@@ -48,11 +48,8 @@ def search_products(
     if query:
         constraints["search_query"] = query
 
-    db = SessionLocal()
-    try:
+    with session_scope() as db:
         rows = product_filtering(db, constraints)
-    finally:
-        db.close()
 
     # Strip down to LLM-safe fields — no pricing, no internal IDs
     products = []

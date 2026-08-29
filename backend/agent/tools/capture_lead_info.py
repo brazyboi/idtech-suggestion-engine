@@ -6,9 +6,30 @@ company, or phone. Not for proactive asking — the agent asks naturally, and
 this tool captures what's shared.
 """
 
+import re
 from typing import Any, Dict
 
 from ...engine.state_machine import ConversationSession
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_PHONE_RE = re.compile(r"^[\d\s()+\-.]{7,20}$")
+
+# Spec/connectivity terms observed live in a hallucinated capture: for "Does
+# the VP6300 support WiFi and Cellular?" the model called
+# capture_lead_info(company="WiFi and Cellular"), writing junk into the lead
+# record. These terms never legitimately appear in a person's name or
+# company name, so treat their presence as a signal of a bad extraction.
+_IMPLAUSIBLE_TERMS = (
+    "wifi", "wi-fi", "cellular", "bluetooth", "ethernet", "usb", "nfc",
+    "emv", "contactless", "magstripe", "rs232", "serial", "pin pad",
+)
+
+
+def _is_plausible_name_or_company(value: str) -> bool:
+    lower = value.lower()
+    if "?" in value:
+        return False
+    return not any(term in lower for term in _IMPLAUSIBLE_TERMS)
 
 
 def capture_lead_info(
@@ -30,16 +51,16 @@ def capture_lead_info(
 
     if session:
         lead = session.collected_info.lead
-        if name and not lead.name:
+        if name and not lead.name and _is_plausible_name_or_company(name):
             lead.name = name.strip()
             captured.append("name")
-        if email and not lead.email:
+        if email and not lead.email and _EMAIL_RE.match(email.strip()):
             lead.email = email.strip()
             captured.append("email")
-        if company and not lead.company:
+        if company and not lead.company and _is_plausible_name_or_company(company):
             lead.company = company.strip()
             captured.append("company")
-        if phone and not lead.phone:
+        if phone and not lead.phone and _PHONE_RE.match(phone.strip()):
             lead.phone = phone.strip()
             captured.append("phone")
 

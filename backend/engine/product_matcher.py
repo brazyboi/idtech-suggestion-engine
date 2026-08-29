@@ -11,7 +11,7 @@ Responsible for:
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..db.session import SessionLocal
+from ..db.session import session_scope
 from ..engine.rulesEngine.product_filtering import product_filtering
 from ..engine.solution_schemas import (
     HardwareRecommendation,
@@ -53,11 +53,8 @@ class ProductMatcher:
             (rows, constraints, debug_payload)
         """
         constraints = collected.to_flat_constraints()
-        db = SessionLocal()
-        try:
+        with session_scope() as db:
             rows = product_filtering(db, constraints)
-        finally:
-            db.close()
 
         debug_match = (
             ProductMatcher._build_debug_match_payload(constraints, rows)

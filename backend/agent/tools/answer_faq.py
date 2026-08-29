@@ -35,7 +35,8 @@ def answer_faq(topic: str) -> Dict[str, Any]:
     Do not paraphrase or add information.
 
     Available topics: pricing, shipping, warranty, returns,
-    compatibility, security, support, general.
+    compatibility, security, support, payment_integration (PAE),
+    device_management (RDM), key_injection (RKI), merchant_services, general.
     """
     data = _load_faq()
     topics = data.get("topics", {})

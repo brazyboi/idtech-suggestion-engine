@@ -170,3 +170,103 @@ class TestLeadEndpoints:
     def test_get_missing_lead_returns_404(self, api_client):
         resp = api_client.get("/api/lead/leads/999999")
         assert resp.status_code == 404
+
+
+# ── D1: admin auth gate on /api/lead/* and /api/maintenance/* ──────────
+
+class TestAdminAuthGate:
+    def test_list_leads_without_key_returns_401(self, unauthed_api_client):
+        resp = unauthed_api_client.get("/api/lead/leads")
+        assert resp.status_code == 401
+
+    def test_list_leads_with_wrong_key_returns_401(self, unauthed_api_client):
+        resp = unauthed_api_client.get("/api/lead/leads", headers={"X-Admin-Api-Key": "wrong"})
+        assert resp.status_code == 401
+
+    def test_list_leads_with_correct_key_succeeds(self, api_client):
+        resp = api_client.get("/api/lead/leads")
+        assert resp.status_code == 200
+
+    def test_maintenance_hardware_without_key_returns_401(self, unauthed_api_client):
+        resp = unauthed_api_client.get("/api/maintenance/hardware/does-not-exist")
+        assert resp.status_code == 401
+
+    def test_maintenance_hardware_create_without_key_returns_401(self, unauthed_api_client):
+        resp = unauthed_api_client.post(
+            "/api/maintenance/hardware",
+            json={"model_name": "VP3300", "categories": [], "use_cases": [], "software": []},
+        )
+        assert resp.status_code == 401
+
+    def test_chat_and_session_remain_public(self, unauthed_api_client):
+        """/api/chat and /api/session must stay unauthenticated — they're the public widget."""
+        resp = unauthed_api_client.post("/api/session")
+        assert resp.status_code == 200
+
+
+# ── D2: session tokens gate GET /api/session/{id} ──────────────────────
+
+class TestSessionTokenAuth:
+    def test_create_session_returns_a_token(self, api_client):
+        resp = api_client.post("/api/session")
+        assert resp.status_code == 200
+        assert resp.json()["session_token"]
+
+    def test_resume_without_token_is_rejected(self, api_client):
+        create_resp = api_client.post("/api/session")
+        session_id = create_resp.json()["session_id"]
+
+        resp = api_client.get(f"/api/session/{session_id}")
+        assert resp.status_code == 403
+
+    def test_resume_with_wrong_token_is_rejected(self, api_client):
+        create_resp = api_client.post("/api/session")
+        session_id = create_resp.json()["session_id"]
+
+        resp = api_client.get(
+            f"/api/session/{session_id}", headers={"X-Session-Token": "wrong"}
+        )
+        assert resp.status_code == 403
+
+    def test_resume_with_correct_token_succeeds(self, api_client):
+        create_resp = api_client.post("/api/session")
+        session_id = create_resp.json()["session_id"]
+        token = create_resp.json()["session_token"]
+
+        resp = api_client.get(
+            f"/api/session/{session_id}", headers={"X-Session-Token": token}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["exists"] is True
+
+    def test_resume_missing_session_returns_exists_false_regardless_of_token(self, api_client):
+        """A nonexistent session_id shouldn't leak whether a token would have
+        been valid — it should just say exists: False, same as before D2."""
+        resp = api_client.get("/api/session/does-not-exist")
+        assert resp.status_code == 200
+        assert resp.json()["exists"] is False
+
+
+# ── D3: per-IP rate limiting and per-session turn cap ───────────────────
+
+class TestRateLimiting:
+    def test_session_creation_is_rate_limited(self, api_client):
+        responses = [api_client.post("/api/session") for _ in range(11)]
+        assert responses[-1].status_code == 429
+
+    def test_chat_turn_cap_returns_429(self, api_client):
+        from backend.routers.chat import MAX_SESSION_TURNS
+
+        create_resp = api_client.post("/api/session")
+        session_id = create_resp.json()["session_id"]
+
+        def _bump_turn_count(message, session):
+            session.turn_count = MAX_SESSION_TURNS
+            return ChatResponse(type="clarification", text="ok")
+
+        with patch("backend.routers.chat.process_message", side_effect=_bump_turn_count):
+            first = api_client.post("/api/chat", json={"message": "hi", "session_id": session_id})
+            assert first.status_code == 200
+
+            second = api_client.post("/api/chat", json={"message": "hi again", "session_id": session_id})
+            assert second.status_code == 429

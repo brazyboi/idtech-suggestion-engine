@@ -37,6 +37,22 @@
     "general": {
       "answer": "That's a great question! A member of our sales engineering team would be the best person to help with that. Would you like me to connect you with a specialist who can provide detailed information tailored to your needs?",
       "keywords": []
+    },
+    "payment_integration": {
+      "answer": "ID TECH's Payment Application Engine (PAE) is EMV Level 3-certified middleware that speeds up EMV certification and deployment, simplifies processor integration, and handles secure tokenization and transaction management. It supports multi-payment acceptance — magstripe, EMV contact, and contactless — plus offline store-and-forward. A specialist can walk you through this for your setup — would you like me to connect you?",
+      "keywords": ["pae", "payment application engine", "middleware", "emv certification", "level 3", "l3", "processor integration", "tokenization"]
+    },
+    "device_management": {
+      "answer": "ID TECH's Remote Device Management (RDM) is a cloud platform for monitoring device health, deploying firmware updates, and managing configuration across your fleet from a single portal — with real-time status, remote diagnostics, group-based or scheduled updates, and role-based access. A specialist can walk you through this for your setup — would you like me to connect you?",
+      "keywords": ["rdm", "remote device management", "firmware", "fleet", "remote update", "device monitoring", "diagnostics"]
+    },
+    "key_injection": {
+      "answer": "With ID TECH's Remote Key Injection (RKI), payment devices receive cryptographic keys over the cloud from PCI-certified key injection facilities — no shipping terminals to a facility, faster activation, and lower logistics cost. It's ideal for unattended environments. A specialist can walk you through this for your setup — would you like me to connect you?",
+      "keywords": ["rki", "key injection", "remote key", "cryptographic key", "key provisioning"]
+    },
+    "merchant_services": {
+      "answer": "ID TECH's merchant services include PCI-validated P2PE encryption, access to low-ticket interchange programs, reporting and visibility tools, and merchant account setup and onboarding support, backed by dedicated support across your processor, gateway, and ID TECH. For any other specific capability you need confirmed for your setup, a specialist can walk you through exactly what's supported — would you like me to connect you?",
+      "keywords": ["merchant services", "merchant account", "processing", "p2pe", "interchange", "acquirer", "gateway", "echeck", "ach", "virtual terminal", "invoicing", "payment link", "boarding", "onboarding"]
     }
   }
 }

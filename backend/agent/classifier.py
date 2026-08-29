@@ -58,7 +58,7 @@ class IntentClassifier:
 
     def __init__(self) -> None:
         api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY")
-        self.client = OpenAI(api_key=api_key or "test-key")
+        self.client = OpenAI(api_key=api_key)
         self.model = "gpt-4o-mini"
 
     def classify(self, user_message: str) -> Tuple[str, float, Dict[str, Any]]:

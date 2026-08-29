@@ -15,6 +15,8 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+from ..db.session import session_scope
+from ..db.repositories.product_query import ProductRepository
 from ..engine.state_machine import CollectedInfo, ConversationSession
 
 # Load once at module level
@@ -66,14 +68,16 @@ You are a sales specialist at ID TECH, a payment hardware company. Your job is t
 
 ## When to Call Which Tool
 - search_products: Call this to find hardware matching the prospect's needs. Use the parameters you have — don't wait to have ALL of them. You can search with just a use_case or category.
-- get_product_details: Call when the prospect asks about a specific device or you want to explain a recommendation in depth.
+- get_product_details: Call when the prospect asks about a specific NAMED device — including "does the <model> support/have/work with <X>?" — or you want to explain a recommendation in depth. A compatibility/spec question that names a product is ALWAYS get_product_details, never answer_faq(topic="compatibility"), even though "compatibility" is also an FAQ topic name — that FAQ topic is only for a generic, no-product-named question like "is your hardware compatible with my POS?".
 - get_solution_content: Call when the prospect wants to understand how ID TECH serves their industry before looking at specific hardware.
-- answer_faq: For pricing, shipping, warranty, returns, compatibility, security, or support questions. Present the answer EXACTLY as returned.
+- answer_faq: For pricing, shipping, warranty, returns, generic (no product named) compatibility, security, or support questions. Present the answer EXACTLY as returned.
 - capture_lead_info: Call SILENTLY when the prospect volunteers their name, email, company, or phone during conversation. Do NOT announce this — just continue naturally.
 - submit_lead: Call once you have the prospect's name and email AND have shown at least one product recommendation. Only call this once.
 - escalate_to_sales: Call if the prospect explicitly asks to speak to someone, or has a complex problem you cannot resolve.
 
 {valid_values_section}
+
+{model_names_section}
 """.strip()
 
 
@@ -204,6 +208,46 @@ def _build_valid_values_section() -> str:
     return "\n".join(lines)
 
 
+def _build_model_names_section() -> str:
+    """
+    List the real catalog model names so the LLM has something to correct
+    a customer's spelling against before calling get_product_details.
+
+    Unlike use_case/category (see _build_valid_values_section), there was
+    previously no valid-values list for product names at all — the model
+    would just echo back whatever the customer typed, typo and all, into a
+    tool whose match used to require literal string equality. That tool now
+    has a fuzzy-match backstop (see get_product_details.py), but a name the
+    model already got right the first time never needs that backstop.
+
+    Queried fresh on every turn (not cached at import time) since the
+    hardware catalog is edited live via the admin UI — a stale in-process
+    cache would silently drift from what search_products/get_product_details
+    actually see. Catalog is small enough that this is cheap.
+    """
+    try:
+        with session_scope() as db:
+            rows = ProductRepository(db).find_products()
+        names = sorted({hw.model_name for hw in rows})
+    except Exception:
+        # Never let an optional prompt-enrichment step break the turn.
+        return ""
+
+    if not names:
+        return ""
+
+    lines = [
+        "## Known Product Model Names",
+        "If the customer names a specific product, match it to the closest name below "
+        "(they may misspell, abbreviate, or add/drop spaces) before calling "
+        "get_product_details or search_products with query=<model name>. This is only "
+        "for recognizing which real product they mean — still call the tool for actual "
+        "specs. Never describe a product from memory.",
+    ]
+    lines.extend(f"- {n}" for n in names)
+    return "\n".join(lines)
+
+
 def build_system_prompt(session: ConversationSession) -> str:
     """
     Build the complete system prompt for this turn based on the session state.
@@ -229,6 +273,7 @@ def build_system_prompt(session: ConversationSession) -> str:
 
     stage_instructions = STAGE_INSTRUCTIONS.get(stage, STAGE_INSTRUCTIONS["qualifying"])
     valid_values = _build_valid_values_section()
+    model_names = _build_model_names_section()
 
     return SYSTEM_PROMPT_TEMPLATE.format(
         stage=stage,
@@ -236,6 +281,7 @@ def build_system_prompt(session: ConversationSession) -> str:
         known_summary=known_summary,
         recommended_products_summary=products_summary,
         valid_values_section=valid_values,
+        model_names_section=model_names,
     )
 
 

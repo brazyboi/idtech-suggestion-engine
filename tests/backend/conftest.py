@@ -26,6 +26,18 @@ if _project_root not in sys.path:
 # already provide a real one.
 os.environ.setdefault("OPENAI_API_KEY", "test-key-for-pytest")
 
+# backend/db/session.py fails fast at import time if DATABASE_URL is unset,
+# same reasoning as OPENAI_API_KEY above. Tests use an in-memory SQLite DB
+# (see db_session fixture below), never the real Postgres URL.
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+
+# backend/main.py fails fast at import time if these are unset (see D1/D2
+# in ARCHITECTURE.md — admin endpoints and session tokens need real
+# secrets in production). Tests never need real secrecy, just a fixed
+# value the test client can present.
+os.environ.setdefault("ADMIN_API_KEY", "test-admin-key-for-pytest")
+os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-for-pytest")
+
 from backend.engine.state_machine import (
     CollectedInfo,
     ConversationSession,
@@ -68,22 +80,33 @@ def db_session():
 @pytest.fixture
 def patch_direct_db_access(db_session, monkeypatch):
     """
-    Several modules (lead_service, search_products, get_product_details) call
-    `SessionLocal()` directly instead of going through FastAPI's `get_db`
-    dependency, so overriding `get_db` alone does not redirect them to the
-    test DB. This patches `SessionLocal` at each of those import sites to a
-    sessionmaker bound to the same in-memory engine as `db_session`, so
-    writes made through them are visible to assertions made via db_session.
+    Several modules (lead_service, search_products, get_product_details,
+    product_matcher) call `session_scope()` directly instead of going through
+    FastAPI's `get_db` dependency, so overriding `get_db` alone does not
+    redirect them to the test DB. `session_scope()` opens sessions via the
+    single `SessionLocal` in backend.db.session, so patching it there once
+    (rather than at every import site) is enough to redirect all of them to
+    the same in-memory engine as `db_session`.
     """
     test_sessionmaker = db_session.info["sessionmaker"]
-    targets = [
-        "backend.engine.lead_service",
-        "backend.agent.tools.search_products",
-        "backend.agent.tools.get_product_details",
-    ]
-    for target in targets:
-        monkeypatch.setattr(f"{target}.SessionLocal", test_sessionmaker)
+    monkeypatch.setattr("backend.db.session.SessionLocal", test_sessionmaker)
     return test_sessionmaker
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """
+    backend.rate_limit.limiter (see D3 in ARCHITECTURE.md) is a module-level
+    singleton shared by the whole process, including every test. Without
+    resetting it between tests, request counts would accumulate across
+    the suite and unrelated tests would start failing with 429s once the
+    cumulative count crossed a limit.
+    """
+    from backend.rate_limit import limiter
+
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture
@@ -91,7 +114,29 @@ def api_client(db_session):
     """
     A FastAPI TestClient wired to the in-memory SQLite session via a
     get_db override, so router tests never touch the real Postgres DB.
+
+    Carries the admin API key by default (see D1 in ARCHITECTURE.md —
+    /api/lead/* and /api/maintenance/* now require it), so existing tests
+    that exercise those endpoints don't each need to pass it explicitly.
+    Auth-specific tests use `unauthed_api_client` instead.
     """
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.db.session import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield TestClient(app, headers={"X-Admin-Api-Key": os.environ["ADMIN_API_KEY"]})
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def unauthed_api_client(db_session):
+    """Same as api_client but with no admin key header, for testing the D1 auth gate."""
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.db.session import get_db

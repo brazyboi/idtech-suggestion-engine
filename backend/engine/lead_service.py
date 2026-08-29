@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 
 from ..db.repositories.lead_repository import LeadRepository
-from ..db.session import SessionLocal
+from ..db.session import session_scope
 from ..engine.state_machine import CollectedInfo
 
 
@@ -19,8 +19,7 @@ class LeadService:
         status: str = "new",
     ) -> Dict[str, Any]:
         """Store a lead in the database."""
-        db = SessionLocal()
-        try:
+        with session_scope() as db:
             repo = LeadRepository(db)
             lead = repo.create_lead(
                 name=name,
@@ -36,8 +35,6 @@ class LeadService:
                 "status": lead.status,
                 "message": "Lead saved successfully.",
             }
-        finally:
-            db.close()
 
     @staticmethod
     def save_lead_from_collected(

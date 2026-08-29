@@ -104,3 +104,61 @@ class TestAnswerFaq:
             result = answer_faq(topic)
             assert "error" not in result, f"Topic '{topic}' returned an error"
             assert len(result["answer"]) > 10, f"Topic '{topic}' has a very short answer"
+
+
+class TestHandoffTopics:
+    """PAE / RDM / RKI / merchant_services should recognize-and-hand-off:
+    a short approved description that ends with an explicit handoff offer,
+    never a deep Q&A capability."""
+
+    _HANDOFF_TOPICS = ["payment_integration", "device_management", "key_injection", "merchant_services"]
+
+    def test_all_handoff_topics_return_nonempty_answers(self):
+        for topic in self._HANDOFF_TOPICS:
+            result = answer_faq(topic)
+            assert "error" not in result, f"Topic '{topic}' returned an error"
+            assert len(result["answer"]) > 20, f"Topic '{topic}' has a very short answer"
+
+    def test_all_handoff_topics_offer_a_handoff(self):
+        for topic in self._HANDOFF_TOPICS:
+            result = answer_faq(topic)
+            answer = result["answer"].lower()
+            assert "connect" in answer or "specialist" in answer, (
+                f"Topic '{topic}' answer doesn't offer a handoff: {result['answer']!r}"
+            )
+
+    def test_payment_integration_topic(self):
+        result = answer_faq("payment_integration")
+        answer = result["answer"].lower()
+        assert "pae" in answer or "payment application engine" in answer
+
+    def test_device_management_topic(self):
+        result = answer_faq("device_management")
+        answer = result["answer"].lower()
+        assert "rdm" in answer or "remote device management" in answer
+
+    def test_key_injection_topic(self):
+        result = answer_faq("key_injection")
+        answer = result["answer"].lower()
+        assert "rki" in answer or "remote key injection" in answer
+
+    def test_merchant_services_topic(self):
+        result = answer_faq("merchant_services")
+        answer = result["answer"].lower()
+        assert "merchant" in answer
+
+    def test_merchant_services_does_not_fabricate_echeck_ach_capability(self):
+        """CRITICAL accuracy constraint: ID TECH's approved copy does not
+        claim eCheck, ACH, virtual-terminal, invoicing, or payment-link
+        capability — those came from an inbound prospect question, not
+        ID TECH's own material. The answer must route those asks to a human
+        without asserting the capability exists."""
+        result = answer_faq("merchant_services")
+        answer = result["answer"].lower()
+        for term in ("echeck", "e-check", "virtual terminal", "invoicing", "payment link"):
+            assert term not in answer, (
+                f"merchant_services answer asserts an unapproved capability ({term!r}): {result['answer']!r}"
+            )
+        # ACH itself is fine to name as something a specialist can confirm,
+        # just never asserted as a capability ID TECH's copy claims.
+        assert "supports ach" not in answer and "ach support" not in answer

@@ -124,3 +124,30 @@ class TestCaptureLeadInfo:
         result = capture_lead_info(name="Alice", session=session)
         assert "_note" in result
         assert "Do NOT announce" in result["_note"]
+
+    def test_rejects_connectivity_spec_as_company(self):
+        """Regression: for "Does the VP6300 support WiFi and Cellular?" the
+        model called capture_lead_info(company="WiFi and Cellular"), writing
+        a spec answer into the lead record instead of a real company name."""
+        session = ConversationSession(id="test")
+        result = capture_lead_info(company="WiFi and Cellular", session=session)
+        assert result["status"] == "no_new_info"
+        assert session.collected_info.lead.company is None
+
+    def test_rejects_connectivity_spec_as_name(self):
+        session = ConversationSession(id="test")
+        result = capture_lead_info(name="Bluetooth and NFC", session=session)
+        assert result["status"] == "no_new_info"
+        assert session.collected_info.lead.name is None
+
+    def test_rejects_malformed_email(self):
+        session = ConversationSession(id="test")
+        result = capture_lead_info(email="not an email", session=session)
+        assert result["status"] == "no_new_info"
+        assert session.collected_info.lead.email is None
+
+    def test_rejects_non_numeric_phone(self):
+        session = ConversationSession(id="test")
+        result = capture_lead_info(phone="call me maybe", session=session)
+        assert result["status"] == "no_new_info"
+        assert session.collected_info.lead.phone is None

@@ -116,15 +116,17 @@ ANSWER_FAQ_TOOL: Dict[str, Any] = {
         "description": (
             "Get the approved answer for a frequently asked question. Use this "
             "when the customer asks about pricing, shipping, warranty, returns, "
-            "compatibility, security, or support. You MUST present the answer "
-            "exactly as returned — do not paraphrase or add information."
+            "compatibility, security, support, or PAE / RDM / RKI / merchant "
+            "services. You MUST present the answer exactly as returned — do not "
+            "paraphrase, add information, or improvise beyond what's returned, "
+            "especially for PAE / RDM / RKI / merchant services topics."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "The FAQ topic: pricing, shipping, warranty, returns, compatibility, security, support, general."
+                    "description": "The FAQ topic: pricing, shipping, warranty, returns, compatibility, security, support, payment_integration (PAE), device_management (RDM), key_injection (RKI), merchant_services, general."
                 },
             },
             "required": ["topic"],
@@ -265,16 +267,35 @@ def get_tools_for_intent(intent: str) -> List[Dict[str, Any]]:
             GET_PRODUCT_DETAILS_TOOL,
             GET_SOLUTION_CONTENT_TOOL,
         ],
-        "faq": [ANSWER_FAQ_TOOL],
+        # escalate_to_sales included because the approved pricing FAQ answer
+        # itself offers to connect the customer — without this the model
+        # can present the offer but has no tool to act on "yes, connect me".
+        "faq": [ANSWER_FAQ_TOOL, ESCALATE_TO_SALES_TOOL],
+        # answer_faq included because the classifier defaults short/ambiguous
+        # messages to "qualification" — a mid-qualification "how much does
+        # it cost?" must still be able to reach the pricing guardrail instead
+        # of the model improvising a price. get_product_details included so
+        # a customer naming a product mid-qualification can get real specs.
         "qualification": [
             SEARCH_PRODUCTS_TOOL,
             GET_SOLUTION_CONTENT_TOOL,
+            GET_PRODUCT_DETAILS_TOOL,
+            ANSWER_FAQ_TOOL,
         ],
-        "lead_capture": [SUBMIT_LEAD_TOOL],
+        # escalate_to_sales for "just have someone call me"; get_product_details
+        # for "what was that model again?"; answer_faq for a last pricing/
+        # warranty/etc question before handing over contact info.
+        "lead_capture": [
+            SUBMIT_LEAD_TOOL,
+            ESCALATE_TO_SALES_TOOL,
+            GET_PRODUCT_DETAILS_TOOL,
+            ANSWER_FAQ_TOOL,
+        ],
         "escalate": [ESCALATE_TO_SALES_TOOL, SUBMIT_LEAD_TOOL],
         "greeting": [
             SEARCH_PRODUCTS_TOOL,
             ANSWER_FAQ_TOOL,
+            GET_SOLUTION_CONTENT_TOOL,
         ],
         "chitchat": [ANSWER_FAQ_TOOL],
     }

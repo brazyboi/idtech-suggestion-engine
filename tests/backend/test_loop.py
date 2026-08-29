@@ -135,6 +135,24 @@ class TestHasOnlyFaqIntent:
         """Exactly 2 question marks should return True."""
         assert _has_only_faq_intent("How much? When does it ship?") is True
 
+    def test_named_product_is_not_pure_faq(self):
+        """A short question naming a specific product is a spec question,
+        not a FAQ — it must reach the agent loop so get_product_details can
+        answer with real specs (regression: 'does the VP6300 support WiFi
+        and Cellular?' was previously answered with generic support-hours
+        boilerplate instead)."""
+        assert _has_only_faq_intent("Does the VP6300 support WiFi and Cellular?") is False
+        assert _has_only_faq_intent("Tell me about the AP3880P") is False
+        assert _has_only_faq_intent("What about the Kiosk IV?") is False
+
+    def test_named_product_with_stray_space_is_not_pure_faq(self):
+        """A space between the model prefix and its digits ('vp 6300') must
+        still be recognized as naming a product — regression: this exact
+        gap let 'does the vp 6300 support wifi?' fall through to the FAQ
+        shortcut live, one space away from the case above."""
+        assert _has_only_faq_intent("does the vp 6300 support wifi?") is False
+        assert _has_only_faq_intent("what about the ap 3880p") is False
+
 
 # ── _detect_faq_topic() ────────────────────────────────────────────────
 
@@ -162,11 +180,74 @@ class TestDetectFaqTopic:
     def test_support_keywords(self):
         assert _detect_faq_topic("I need support") == "support"
 
+    def test_support_as_verb_is_compatibility_not_support_topic(self):
+        """'does it support <spec>' asks about capability, not customer
+        service — must not be captured by the bare 'support' keyword
+        (regression, see test_named_product_is_not_pure_faq above)."""
+        assert _detect_faq_topic("does it support WiFi and Cellular") == "compatibility"
+        assert _detect_faq_topic("can it support NFC") == "compatibility"
+
+    def test_plural_forms_of_keywords_still_match(self):
+        """Keywords are stored singular but customers write plurals. The
+        word-boundary matching added to stop 'ach' matching 'reach' also
+        silently broke these — each fell through to 'general' until the
+        matcher allowed a plural suffix. Every existing test used singular
+        forms, so the whole suite stayed green through the regression."""
+        assert _detect_faq_topic("what are your rates?") == "pricing"
+        assert _detect_faq_topic("do you have returns") == "returns"
+        assert _detect_faq_topic("what integrations do you have") == "compatibility"
+
+    def test_ach_does_not_match_words_merely_containing_it(self):
+        """The false positive that motivated word-boundary matching:
+        merchant_services' 'ach' keyword must not fire on reach/each/coach."""
+        assert _detect_faq_topic("how do I reach you") == "support"
+        assert _detect_faq_topic("each of these devices") == "general"
+
     def test_unknown_falls_back_to_general(self):
         assert _detect_faq_topic("tell me about the company") == "general"
 
     def test_case_insensitive(self):
         assert _detect_faq_topic("HOW MUCH") == "pricing"
+
+    # ── Package A handoff topics: PAE / RDM / RKI / merchant services ──
+
+    def test_payment_integration_keywords(self):
+        assert _detect_faq_topic("what is PAE") == "payment_integration"
+        assert _detect_faq_topic("tell me about your payment application engine") == "payment_integration"
+        assert _detect_faq_topic("do you have EMV Level 3 certification") == "payment_integration"
+
+    def test_device_management_keywords(self):
+        assert _detect_faq_topic("what is RDM") == "device_management"
+        assert _detect_faq_topic("can you do remote device management") == "device_management"
+        assert _detect_faq_topic("how do firmware updates work") == "device_management"
+
+    def test_key_injection_keywords(self):
+        assert _detect_faq_topic("what is RKI") == "key_injection"
+        assert _detect_faq_topic("tell me about key injection") == "key_injection"
+        assert _detect_faq_topic("how does remote key provisioning work") == "key_injection"
+
+    def test_merchant_services_keywords(self):
+        assert _detect_faq_topic("tell me about merchant services") == "merchant_services"
+        assert _detect_faq_topic("do you support ACH?") == "merchant_services"
+        assert _detect_faq_topic("what about P2PE") == "merchant_services"
+        assert _detect_faq_topic("what's involved in merchant onboarding") == "merchant_services"
+
+    def test_merchant_services_ach_does_not_collide_with_support(self):
+        """'ach' is a substring of common English words like 'reach' — a
+        plain substring match would misroute ordinary support questions to
+        merchant_services. Word-boundary matching must prevent that."""
+        assert _detect_faq_topic("how can I reach support") == "support"
+        assert _detect_faq_topic("I need to reach someone") == "support"
+
+    def test_new_topics_do_not_collide_with_existing_eight(self):
+        """None of the 4 new topics should shadow the 8 pre-existing ones."""
+        assert _detect_faq_topic("how much does it cost") == "pricing"
+        assert _detect_faq_topic("when does it ship") == "shipping"
+        assert _detect_faq_topic("what's the warranty") == "warranty"
+        assert _detect_faq_topic("can I return it") == "returns"
+        assert _detect_faq_topic("is it compatible with my POS") == "compatibility"
+        assert _detect_faq_topic("what about PCI compliance") == "security"
+        assert _detect_faq_topic("I need support") == "support"
 
 
 # ── process_message() — Chitchat path ──────────────────────────────────
