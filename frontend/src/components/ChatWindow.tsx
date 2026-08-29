@@ -3,6 +3,7 @@ import ChatInput from "./ChatInput";
 import type { Message } from "../types/messages";
 import MessageBubble from "./MessageBubble";
 import MultipleChoiceMessage from "./MultipleChoiceMessage";
+import { CONTACT_URL } from "../constants";
 
 interface ChatWindowProps {
   messages: Message[];
@@ -42,11 +43,14 @@ export default function ChatWindow({
   }, [messages, isTyping]);
 
   return (
-    <div className="mt-8 mr-4 ml-auto min-w-[50vh] max-w-[50vh] px-6 py-8 flex flex-col h-[90vh] border-2 rounded-l overflow-hidden chat-bg text-primary" style={{ borderColor: "var(--border)" }}>
+    <div
+      className="mt-4 md:mt-8 mr-0 md:mr-4 ml-auto w-full md:w-[50vh] md:min-w-[400px] max-w-full md:max-w-[50vh] px-4 md:px-6 py-6 md:py-8 flex flex-col h-[100dvh] md:h-[90vh] border-0 md:border-2 md:rounded-l overflow-hidden chat-bg text-primary"
+      style={{ borderColor: "var(--border)" }}
+    >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b-2 shrink-0" style={{ borderColor: "var(--border)" }}>
         <div>
-          <p className="text-2xl font-semibold text-primary">ID TECH Agent</p>
+          <h1 className="brand-name text-2xl font-semibold text-primary">ID TECH Agent</h1>
         </div>
       </div>
 
@@ -72,10 +76,13 @@ export default function ChatWindow({
       </div>
 
       {/* Escalation strip */}
-      <div className="flex items-center gap-1 px-4 py-2 border-t" style={{ borderColor: "var(--border)" }}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 border-t" style={{ borderColor: "var(--border)" }}>
         <span className="text-xs text-secondary">Can't find what you need?</span>
         <a href="mailto:sales@idtechproducts.com" className="text-xs" style={{ color: "var(--accent)" }}>
           Email our team →
+        </a>
+        <a href={CONTACT_URL} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: "var(--accent)" }}>
+          Contact sales →
         </a>
       </div>
 

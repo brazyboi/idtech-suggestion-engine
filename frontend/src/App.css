@@ -1,9 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* Body copy uses DM Sans; the branded title uses Inter Tight for emphasis. */
 body {
     background-color: var(--bg);
-    font-family: 'Inter', sans-serif
+    font-family: 'DM Sans', 'Inter', sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6,
+.brand-name {
+    font-family: 'Inter Tight', 'DM Sans', sans-serif;
+}
+
+body, button, input, textarea, select, a, p, span, li, div {
+    font-family: 'DM Sans', 'Inter', sans-serif;
 }
 
 :root {

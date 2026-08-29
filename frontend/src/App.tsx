@@ -213,8 +213,8 @@ function App() {
         botMsg.product = product;
       }
 
-      if (resp.ui_actions && resp.ui_actions.length > 0) {
-        console.log("[ui_actions]", resp.ui_actions);
+      if (resp.ui_actions?.includes("offer_booking")) {
+        botMsg.offerBooking = true;
       }
 
       setMessages((prev) => [...prev, botMsg]);
@@ -247,11 +247,13 @@ function App() {
                 {isLightTheme ? "Dark Mode" : "Light Mode"}
               </button>
               <ChatWindow messages={messages} onSend={onSend} isTyping={isTyping} disabled={disabled} />
-              <DebugPanel
-                collectedInfo={collectedInfo}
-                nextState={nextState}
-                messageCount={messages.length}
-              />
+              {import.meta.env.DEV && (
+                <DebugPanel
+                  collectedInfo={collectedInfo}
+                  nextState={nextState}
+                  messageCount={messages.length}
+                />
+              )}
             </div>
           }
         />

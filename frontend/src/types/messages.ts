@@ -23,4 +23,6 @@ export interface Message {
   product?: Product;
   collectedInfo?: Record<string, unknown>;
   nextState?: string;
+  /** Set when the backend's ui_actions include "offer_booking" (escalation/handoff). */
+  offerBooking?: boolean;
 }

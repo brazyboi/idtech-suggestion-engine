@@ -2,6 +2,7 @@ import type { Message } from "../types/messages";
 import ProductCard from "./ProductCard";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { CONTACT_URL } from "../constants";
 
 export default function MessageBubble({
   msg,
@@ -51,6 +52,19 @@ export default function MessageBubble({
                       {label}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {msg.offerBooking && (
+                <div className="mt-2">
+                  <a
+                    href={CONTACT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block rounded-full border px-3 py-1 text-xs transition-colors btn-accent hover:cursor-pointer"
+                  >
+                    Contact our sales team →
+                  </a>
                 </div>
               )}
             </div>
