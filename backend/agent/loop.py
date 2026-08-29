@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -172,14 +173,21 @@ def process_message(message: str, session: ConversationSession) -> ChatResponse:
     """
     trace = ReasoningTrace(turn_id=f"turn-{session.turn_count}")
 
-    # ── 1. Classify intent ──
-    intent, confidence, _ = classify_intent(message)
+    # ── 1 & 2. Classify intent and extract slots concurrently ──
+    # Both are independent OpenAI calls on the raw message — classify_intent
+    # never touches session state, extract_slots never touches intent — so
+    # running them sequentially was a free round-trip left on the table.
+    # process_message is sync end-to-end, so a thread pool (not
+    # asyncio.gather) is the minimal way to overlap the two blocking calls.
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        intent_future = executor.submit(classify_intent, message)
+        slots_future = executor.submit(extract_slots, message, session.collected_info)
+        intent, confidence, _ = intent_future.result()
+        new_info = slots_future.result()
+
     session.intent = intent
     trace.intent_classified(intent, confidence, {})
     logger.info("Turn %d — intent: %s", session.turn_count, intent)
-
-    # ── 2. Passively extract slots from this message ──
-    new_info = extract_slots(message, session.collected_info)
     if new_info:
         logger.info("Extracted: %s", new_info)
 
