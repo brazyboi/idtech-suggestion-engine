@@ -1,0 +1,385 @@
+{
+  "n_messages": 20,
+  "turn_total": {
+    "label": "turn_total (full process_message call)",
+    "count": 20,
+    "p50_ms": 1770.0,
+    "p95_ms": 3972.3,
+    "mean_ms": 1886.4,
+    "max_ms": 5357.5
+  },
+  "classify_extract_calls": {
+    "label": "gpt-4o-mini calls (classify_intent + extract_slots, run concurrently as of F1)",
+    "count": 40,
+    "p50_ms": 581.9,
+    "p95_ms": 1134.5,
+    "mean_ms": 655.4,
+    "max_ms": 2042.6
+  },
+  "agent_round_calls": {
+    "label": "gpt-4o calls (one per agent round)",
+    "count": 18,
+    "p50_ms": 970.5,
+    "p95_ms": 1631.9,
+    "mean_ms": 1043.0,
+    "max_ms": 1671.6
+  },
+  "rounds_per_turn": {
+    "mean": 0.9,
+    "max": 2
+  },
+  "per_turn": [
+    {
+      "message": "Hi, what can you help me with?",
+      "total_ms": 3290.9,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 1.2781624170020223
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 2.0426344168372452
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.2348446249961853
+        }
+      ]
+    },
+    {
+      "message": "What do you have for outdoor parking payment terminals?",
+      "total_ms": 1834.5,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.647509790956974
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.7394238328561187
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.0897392500191927
+        }
+      ]
+    },
+    {
+      "message": "We're a parking operator looking for hardware.",
+      "total_ms": 2032.4,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6586029171012342
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 1.0569341671653092
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.9704940828960389
+        }
+      ]
+    },
+    {
+      "message": "It's for outdoor use, no host computer nearby.",
+      "total_ms": 1770.0,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6551357498392463
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.8313720831647515
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.9341265419498086
+        }
+      ]
+    },
+    {
+      "message": "We need PIN entry and contactless.",
+      "total_ms": 1756.2,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.4241629170719534
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6992452500853688
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.052113583078608
+        }
+      ]
+    },
+    {
+      "message": "About 5000 transactions a month.",
+      "total_ms": 1740.0,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5414009171072394
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6444356250576675
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.0911589169409126
+        }
+      ]
+    },
+    {
+      "message": "Does the VP6300 support WiFi and Cellular?",
+      "total_ms": 5357.5,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.4072912079282105
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 1.1344769590068609
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.1048175001051277
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.6716471249237657
+        }
+      ]
+    },
+    {
+      "message": "What's the operating temperature range on the VP7200?",
+      "total_ms": 3448.8,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.460045708110556
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.49628395796753466
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.6812087500002235
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.9208206250332296
+        }
+      ]
+    },
+    {
+      "message": "How much does the VP3300 cost?",
+      "total_ms": 2169.0,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6146094580180943
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.7009961670264602
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.7254472910426557
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.7361777499318123
+        }
+      ]
+    },
+    {
+      "message": "What's your shipping time?",
+      "total_ms": 511.3,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.38881208398379385
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5076431659981608
+        }
+      ]
+    },
+    {
+      "message": "What's your warranty policy?",
+      "total_ms": 505.6,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.49066216708160937
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5035515001509339
+        }
+      ]
+    },
+    {
+      "message": "Can I return a device if it doesn't work out?",
+      "total_ms": 521.6,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.4677021249663085
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5190271660685539
+        }
+      ]
+    },
+    {
+      "message": "Is the VP7200 PCI compliant?",
+      "total_ms": 3972.3,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.4573514580260962
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5366036659106612
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.874114332953468
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.2942556249909103
+        }
+      ]
+    },
+    {
+      "message": "Do you support ACH payments?",
+      "total_ms": 529.0,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5035067088901997
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5268747080117464
+        }
+      ]
+    },
+    {
+      "message": "My name is Jane Smith, jane@example.com, at Acme Parking.",
+      "total_ms": 3115.2,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.49334558309055865
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.7029865828808397
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.6319062910042703
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.7750645419582725
+        }
+      ]
+    },
+    {
+      "message": "Yes, connect me with sales.",
+      "total_ms": 1618.4,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6783902910538018
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6780435410328209
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 0.9361315839923918
+        }
+      ]
+    },
+    {
+      "message": "I need to speak to a person right now.",
+      "total_ms": 606.3,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5370414999779314
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.6006838330067694
+        }
+      ]
+    },
+    {
+      "message": "Tell me a joke.",
+      "total_ms": 582.9,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5819355838466436
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5819398330058903
+        }
+      ]
+    },
+    {
+      "message": "What do you think about the weather today?",
+      "total_ms": 549.6,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5452316249720752
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5482785829808563
+        }
+      ]
+    },
+    {
+      "message": "We're a retail store needing an indoor USB reader for card-present transactions.",
+      "total_ms": 1816.7,
+      "calls": [
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.5742016669828445
+        },
+        {
+          "model": "gpt-4o-mini",
+          "elapsed_s": 0.7610635841265321
+        },
+        {
+          "model": "gpt-4o",
+          "elapsed_s": 1.0503947499673814
+        }
+      ]
+    }
+  ]
+}
